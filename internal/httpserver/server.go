@@ -21,6 +21,8 @@ type Deps struct {
 	Staff        *staff.Service
 	PublicOrigin string
 	TrustProxy   bool
+	Environment  string
+	Version      string
 	Console      fs.FS
 	Ready        func(ctx context.Context) error
 	Log          *slog.Logger
@@ -40,6 +42,7 @@ func New(d Deps) http.Handler {
 	}
 	s := &Server{deps: d, mux: http.NewServeMux()}
 	s.mux.HandleFunc("GET /healthz", s.health)
+	s.mux.HandleFunc("GET /api/meta", s.meta)
 	s.mux.HandleFunc("POST /api/auth/login", s.login)
 	s.mux.HandleFunc("POST /api/auth/logout", s.logout)
 	s.mux.Handle("GET /api/me", s.RequireStaff(http.HandlerFunc(s.me)))
@@ -155,6 +158,14 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	s.clearCookie(w)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) meta(w http.ResponseWriter, _ *http.Request) {
+	environment := s.deps.Environment
+	if environment == "" {
+		environment = "development"
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"environment": environment, "version": s.deps.Version})
 }
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {

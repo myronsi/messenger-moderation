@@ -157,3 +157,11 @@ func TestConsoleIsServedWithFallback(t *testing.T) {
 		t.Fatalf("unknown api = %d %s", rec.Code, rec.Body)
 	}
 }
+
+func TestMetaIsPublic(t *testing.T) {
+	f := newFixture(t)
+	rec := f.do(t, http.MethodGet, "/api/meta", "", nil, false)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"environment":"development"`) {
+		t.Fatalf("meta = %d %s", rec.Code, rec.Body)
+	}
+}

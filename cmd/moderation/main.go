@@ -21,7 +21,10 @@ import (
 	"github.com/myronsi/messenger-moderation/internal/db"
 	"github.com/myronsi/messenger-moderation/internal/httpserver"
 	"github.com/myronsi/messenger-moderation/internal/staff"
+	"github.com/myronsi/messenger-moderation/internal/status"
 )
+
+var version = "dev"
 
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
@@ -73,10 +76,18 @@ func serve(cfg config.Config, log *slog.Logger) error {
 		return err
 	}
 
-	handler := httpserver.New(httpserver.Deps{
-		Staff: staffSvc, PublicOrigin: cfg.PublicOrigin, TrustProxy: cfg.TrustProxy,
-		Console: consoleFS, Ready: pool.Ping, Log: log,
+	reporter := status.NewReporter(pool)
+	monitor := status.NewMonitor(pool, status.Options{
+		Probes: statusProbes(cfg, pool.Ping), Notifier: alertNotifier(cfg), Log: log, Interval: cfg.Status.Interval,
 	})
+	handler := httpserver.New(httpserver.Deps{
+		Staff: staffSvc, PublicOrigin: cfg.PublicOrigin, TrustProxy: cfg.TrustProxy, Environment: cfg.Environment, Version: version,
+		Console: consoleFS, Ready: pool.Ping, Log: log,
+		Register: func(mux *http.ServeMux, s *httpserver.Server) {
+			status.Register(mux, s, reporter, cfg.Status.PublicOrigins)
+		},
+	})
+	go monitor.Run(ctx)
 	srv := &http.Server{
 		Addr: cfg.Addr, Handler: handler,
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 120 * time.Second,

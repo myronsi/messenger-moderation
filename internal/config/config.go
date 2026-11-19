@@ -22,7 +22,27 @@ type Config struct {
 	SessionTTL    time.Duration `env:"STAFF_SESSION_TTL" envDefault:"12h"`
 	ConsoleDir    string        `env:"CONSOLE_DIR"`
 	TrustProxy    bool          `env:"TRUST_PROXY" envDefault:"false"`
+	Environment   string        `env:"ENVIRONMENT_NAME" envDefault:"development"`
 	Messenger     Messenger
+	Status        Status
+	Mail          Mail
+}
+
+type Status struct {
+	APIReadyURL     string        `env:"MESSENGER_API_READY_URL"`
+	WorkerHealthURL string        `env:"MESSENGER_WORKER_HEALTH_URL"`
+	LiveKitURL      string        `env:"LIVEKIT_HEALTH_URL"`
+	Interval        time.Duration `env:"CHECK_INTERVAL" envDefault:"1m"`
+	PublicOrigins   []string      `env:"STATUS_CORS_ORIGINS" envSeparator:","`
+}
+
+type Mail struct {
+	Host       string `env:"SMTP_HOST"`
+	Port       int    `env:"SMTP_PORT" envDefault:"587"`
+	Username   string `env:"SMTP_USERNAME"`
+	Password   string `env:"SMTP_PASSWORD"`
+	From       string `env:"SMTP_FROM"`
+	AlertEmail string `env:"ALERT_EMAIL"`
 }
 
 type Messenger struct {
@@ -58,6 +78,11 @@ func (c Config) validate() error {
 	default:
 		add("APP_ENV must be development, test or production")
 	}
+	switch c.Environment {
+	case "development", "staging", "production":
+	default:
+		add("ENVIRONMENT_NAME must be development, staging or production")
+	}
 	if key, err := base64.StdEncoding.DecodeString(c.EncryptionKey); err != nil || len(key) != 32 {
 		add("ENCRYPTION_KEY must be 32 random bytes, base64 encoded (openssl rand -base64 32)")
 	}
@@ -75,6 +100,12 @@ func (c Config) validate() error {
 	}
 	if c.Messenger.InternalURL != "" && len(c.Messenger.InternalToken) < 32 {
 		add("MESSENGER_INTERNAL_TOKEN must be at least 32 characters when MESSENGER_INTERNAL_URL is set")
+	}
+	if c.Status.Interval < 10*time.Second {
+		add("CHECK_INTERVAL must be at least 10s")
+	}
+	if c.Mail.AlertEmail != "" && (c.Mail.Host == "" || c.Mail.From == "") {
+		add("ALERT_EMAIL needs SMTP_HOST and SMTP_FROM")
 	}
 	if len(problems) > 0 {
 		return errors.New("invalid configuration: " + strings.Join(problems, "; "))
