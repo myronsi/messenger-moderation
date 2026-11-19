@@ -22,12 +22,27 @@ CREATE ROLE moderation_reader LOGIN PASSWORD '<random>';
 GRANT CONNECT ON DATABASE messenger TO moderation_reader;
 \c messenger
 GRANT USAGE ON SCHEMA public TO moderation_reader;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO moderation_reader;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO moderation_reader;
 ```
 
-Run `ALTER DEFAULT PRIVILEGES` as the role that runs the Messenger migrations, so later tables are readable
-too. The moderation service never writes to the Messenger database.
+The reader gets **only the tables and columns a feature needs**, never `ALL TABLES` and no default
+privileges: password hashes, sessions, recovery data and messages stay out of reach. The moderation service
+never writes to the Messenger database.
+
+### 1a. Read grants
+
+Run the grants of every feature that is deployed. Each pull request that reads another table or column adds
+its grant here, in the same change.
+
+| Feature | Grants |
+|---|---|
+| Review queue, account page, search | `GRANT SELECT (id, username, display_name, bio, created_at, last_seen_at) ON users TO moderation_reader;`<br>`GRANT SELECT ON user_reports, user_moderation, user_moderation_events TO moderation_reader;` |
+
+Check what the reader can see:
+
+```sql
+SELECT table_name, column_name FROM information_schema.column_privileges
+WHERE grantee = 'moderation_reader' ORDER BY 1, 2;
+```
 
 ### 2. Messenger internal API
 
