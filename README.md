@@ -13,6 +13,8 @@ planning folder), section 0 "Architecture v2".
 | `internal/db` | PostgreSQL pool and embedded migrations (`internal/db/migrations`) for the `moderation` database |
 | `internal/staff` | Staff accounts: Argon2id passwords, required TOTP, 12-hour sessions, roles `admin` and `moderator`, sign-in rate limit |
 | `internal/audit` | Append-only audit log (rows can only be deleted after 2 years; enforced by a database trigger) |
+| `internal/appdb` | Read-only connection to the Messenger database (`appdbtest` holds the copy of the Messenger tables the tests use) |
+| `internal/review` | Review queue, account page and account search; every call writes a data-access row to the audit log |
 | `internal/httpserver` | HTTP API under `/api`, security headers, same-origin check for changes, console files with SPA fallback; `RequireStaff` and `RequireAdmin` for new routes |
 | `internal/status` | Status checks every minute, incidents after 3 failures, monitoring gaps, email alerts, `/status.json` (public) and `/api/status` (admins), daily uptime |
 | `internal/testdb` | Test helper: a fresh schema per test in the test PostgreSQL |
@@ -31,7 +33,7 @@ planning folder), section 0 "Architecture v2".
 | `TRUST_PROXY` | `false` | Use `X-Forwarded-For` for the client address (set behind nginx) |
 | `CONSOLE_DIR` | empty | Serve the console from a folder instead of the embedded build (development) |
 | `MESSENGER_INTERNAL_URL`, `MESSENGER_INTERNAL_TOKEN` | empty | messenger-back's internal API (`docs/internal-api.md` there) |
-| `MESSENGER_READ_DATABASE_URL` | empty | Read-only user on the Messenger database |
+| `MESSENGER_READ_DATABASE_URL` | empty | Read-only user on the Messenger database; without it the queue, account pages and search answer `503` |
 | `ENVIRONMENT_NAME` | `development` | `development`, `staging` or `production`; shown as a coloured badge in the console |
 | `MESSENGER_API_READY_URL` | empty | The API readiness address, for example `http://api:8080/readyz`; checks the API and every store behind it |
 | `MESSENGER_WORKER_HEALTH_URL` | empty | The worker health address, for example `http://worker:8081/healthz` |
@@ -40,6 +42,29 @@ planning folder), section 0 "Architecture v2".
 | `STATUS_CORS_ORIGINS` | empty | Sites allowed to read `/status.json`, for example the help site |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | port 587 | Mail server for alerts |
 | `ALERT_EMAIL` | empty | Where incident alerts go; needs `SMTP_HOST` and `SMTP_FROM` |
+
+## Messenger database access
+
+The service opens the Messenger database with `default_transaction_read_only=on`. The queue, account page and
+search read only these columns, so this is the smallest grant for `moderation_reader` (see `docs/deploy.md`);
+column grants keep `password_hash` and other private fields out:
+
+```sql
+GRANT SELECT (id, username, display_name, bio, created_at, last_seen_at) ON users TO moderation_reader;
+GRANT SELECT ON user_reports, user_moderation, user_moderation_events TO moderation_reader;
+```
+
+## API
+
+All routes need a staff session (cookie `mod_session`); moderators and admins may use them.
+
+| Route | What | Audit action |
+|---|---|---|
+| `GET /api/queue` | Accounts with reports newer than the last staff review, or a restricted or suspended status set after it; most urgent first (status level, newest report that counts, score). Query: `status` and `reason` (comma-separated), `opened_after`, `opened_before` (RFC 3339, when the account entered the queue), `limit` (1 to 100, default 50), `cursor` | `queue.viewed` with the listed user IDs |
+| `GET /api/users/{id}` | Profile, current status with probation and appeal block, status history, all reports with reporter, reason, note, context, weight and profile snapshot | `user.viewed`, target `user` |
+| `GET /api/users?q=` | Up to 20 accounts by username prefix, display name or ID (at least 2 characters or an ID; a leading `@` is ignored) | `users.searched` with the query and the user IDs |
+
+Staff decisions arrive with M2; until then no account counts as reviewed.
 
 ## Commands
 
