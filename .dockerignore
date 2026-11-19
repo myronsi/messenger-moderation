@@ -1,0 +1,8 @@
+.git
+.github
+console/node_modules
+console/dist
+*.exe
+moderation
+.env
+.env.test

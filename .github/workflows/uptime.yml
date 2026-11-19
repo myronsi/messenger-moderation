@@ -1,0 +1,39 @@
+name: Uptime
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      matrix:
+        url:
+          - ${{ vars.UPTIME_APP_URL || 'https://messenger.viserix.com/' }}
+          - ${{ vars.UPTIME_STATUS_URL || 'https://moderation.messenger.viserix.com/status.json' }}
+    steps:
+      - name: Check ${{ matrix.url }}
+        env:
+          URL: ${{ matrix.url }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if curl --fail --silent --show-error --max-time 15 --output /dev/null "$URL"; then
+              echo "$URL is reachable"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::$URL is not reachable from outside"
+          exit 1

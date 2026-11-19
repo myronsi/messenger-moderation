@@ -1,90 +1,98 @@
-name: Deploy static page
+name: Deploy
 
 on:
   push:
     branches: [main]
     tags: ['v*.*.*']
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Tag or commit to deploy (production accepts only vX.Y.Z tags)
+        required: true
+        type: string
+      environment:
+        description: Where to deploy
+        required: true
+        type: choice
+        options: [staging, production]
+        default: staging
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
-  group: static-page-${{ github.ref_type }}
+  group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_type == 'tag' && 'production' || 'staging') }}
   cancel-in-progress: false
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ github.ref_type == 'tag' && 'production' || 'staging' }}
-      url: ${{ steps.validate.outputs.url }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_type == 'tag' && 'production' || 'staging') }}
     env:
-      DEPLOY_ENV: ${{ github.ref_type == 'tag' && 'production' || 'staging' }}
+      TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref_type == 'tag' && 'production' || 'staging') }}
+      REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+      APP_DIR: ${{ vars.DEPLOY_PATH || '/opt/messenger-moderation' }}
+      IMAGE_REPO: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Validate deployment
-        id: validate
-        shell: bash
+      - name: Check the request
+        id: check
         run: |
           set -euo pipefail
-
-          case "$GITHUB_REPOSITORY" in
-            myronsi/messenger-docs) site=docs; account=msg-docs ;;
-            myronsi/messenger-moderation) site=moderation; account=msg-mod ;;
-            *) exit 1 ;;
-          esac
-
-          if [[ "$DEPLOY_ENV" == production ]]; then
-            [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-            git merge-base --is-ancestor HEAD origin/main
-          elif [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
-            echo 'A newer commit is on main. Skipping this staging deployment.'
-            exit 0
+          if [ "$TARGET" = production ]; then
+            [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::production deploys only vX.Y.Z tags"; exit 1; }
+            git merge-base --is-ancestor HEAD origin/main || { echo "::error::$REF is not on main"; exit 1; }
+            tag="$REF"
+          else
+            tag="sha-$(git rev-parse --short=12 HEAD)"
           fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-          domain="$site.messenger.viserix.com"
-          if [[ "$DEPLOY_ENV" == staging ]]; then
-            domain="$site.staging.messenger.viserix.com"
-          fi
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          push: true
+          build-args: VERSION=${{ steps.check.outputs.tag }}
+          tags: ${{ env.IMAGE_REPO }}:${{ steps.check.outputs.tag }}
 
-          test -s index.html
-          printf 'url=https://%s\nuser=%s-%s\n' "$domain" "$account" "$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
-
-      - name: Publish and verify
-        if: steps.validate.outputs.url != ''
-        shell: bash
+      - name: Prepare SSH
         env:
-          SSH_KEY: ${{ secrets.SSH_KEY }}
-          DEPLOY_URL: ${{ steps.validate.outputs.url }}
-          SSH_USER: ${{ steps.validate.outputs.user }}
+          HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          USER: ${{ secrets.DEPLOY_SSH_USER }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-
-          if [[ -z "$SSH_KEY" ]]; then
-            echo '::error::Set SSH_KEY in this GitHub environment.'
+          if [ -z "$HOST" ] || [ -z "$USER" ] || [ -z "$KEY" ] || [ -z "$KNOWN" ]; then
+            echo "::error::The $TARGET environment lacks DEPLOY_SSH_HOST, DEPLOY_SSH_USER, DEPLOY_SSH_KEY or DEPLOY_SSH_KNOWN_HOSTS (docs/deploy.md)"
             exit 1
           fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          printf 'Host deploy\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/id_deploy\n  StrictHostKeyChecking yes\n' "$HOST" "$USER" > ~/.ssh/config
 
-          work="$(mktemp -d)"
-          trap 'rm -rf -- "$work"' EXIT
-          printf '%s\n' "$SSH_KEY" > "$work/key"
-          printf '%s\n' 'messenger-static ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINn+Y95r3KWNKb/Ha9j0wd8f2C9uXkOyIgFbExH7q5BF' > "$work/known_hosts"
-          chmod 600 "$work/key" "$work/known_hosts"
+      - name: Upload the stack
+        run: tar -C deploy -czf - compose.yaml deploy.sh env.example | ssh deploy "mkdir -p '$APP_DIR' && tar -xzf - -C '$APP_DIR'"
 
-          checksum="$(sha256sum index.html | cut -d ' ' -f 1)"
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$work/known_hosts" \
-            -o HostKeyAlias=messenger-static -o HostKeyAlgorithms=ssh-ed25519 \
-            -i "$work/key" -l "$SSH_USER" messenger.viserix.com \
-            "publish $checksum" < index.html
+      - name: Log in to GHCR on the server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_ACTOR: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | ssh deploy "docker login ghcr.io -u '$GH_ACTOR' --password-stdin"
 
-          curl --fail --silent --show-error --retry 3 --max-time 15 \
-            --header 'Cache-Control: no-cache' "$DEPLOY_URL/?deploy=$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
-            --output "$work/public.html"
-          cmp index.html "$work/public.html"
+      - name: Deploy
+        run: ssh deploy "bash '$APP_DIR/deploy.sh' '$APP_DIR' '$IMAGE_REPO:${{ steps.check.outputs.tag }}'"

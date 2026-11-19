@@ -38,6 +38,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	if len(args) > 0 {
 		command, args = args[0], args[1:]
 	}
+	if command == "healthcheck" {
+		return healthcheck()
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -191,4 +194,24 @@ func newLogger(level string) *slog.Logger {
 		l = slog.LevelInfo
 	}
 	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: l}))
+}
+
+const healthURL = "http://127.0.0.1:8090/healthz"
+
+func healthcheck() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthz answered %d", resp.StatusCode)
+	}
+	return nil
 }
