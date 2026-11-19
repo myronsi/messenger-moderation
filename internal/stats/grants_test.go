@@ -67,5 +67,5 @@ func TestCollectNeedsOnlyTheReadGrants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect as the reader: %v", err)
 	}
-	want(t, r, map[string]any{"users_total": 4, "users_new": 2, "messages": 0, "calls": 3, "media_jobs_waiting": 2, "reports_total": 3, "pack_reports_total": 1})
+	want(t, r, map[string]any{"users_total": 4, "users_new": 2, "messages": 0, "calls": 3, "media_jobs_waiting": 2, "reports_total": 3, "pack_reports_total": 2})
 }

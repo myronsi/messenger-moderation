@@ -90,7 +90,7 @@ export const USAGE_CHARTS: ChartDef[] = [
 
 export const MODERATION_CHARTS: ChartDef[] = [
   { id: 'reports', title: 'Account reports by reason', description: 'Reports received against accounts.', kind: 'bar', breakdown: { field: 'reports', order: REPORT_REASONS } },
-  { id: 'pack-reports', title: 'Pack reports by reason', description: 'Reports received against sticker packs.', kind: 'bar', breakdown: { field: 'pack_reports', order: PACK_REASONS } },
+  { id: 'pack-reports', title: 'Pack reports by reason', description: 'Reports received against sticker and emoji packs.', kind: 'bar', breakdown: { field: 'pack_reports', order: PACK_REASONS } },
   { id: 'decisions', title: 'Decisions by type', description: 'Decisions made by staff.', kind: 'bar', breakdown: { field: 'decisions', order: DECISIONS } },
   {
     id: 'median', title: 'Median time to decision', description: 'From case opened to decision; for weeks and months the average of the daily medians.',

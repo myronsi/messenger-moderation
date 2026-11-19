@@ -126,7 +126,7 @@ func (c *Collector) calls(ctx context.Context, r Row, day, end time.Time) error 
 func (c *Collector) reports(ctx context.Context, r Row, day, end time.Time) error {
 	for _, q := range []struct{ name, query string }{
 		{"reports", `SELECT reason, count(*) FROM user_reports WHERE created_at >= $1 AND created_at < $2 GROUP BY reason`},
-		{"pack_reports", `SELECT reason, count(*) FROM sticker_pack_reports WHERE created_at >= $1 AND created_at < $2 GROUP BY reason`},
+		{"pack_reports", `SELECT reason, count(*) FROM (SELECT reason FROM sticker_pack_reports WHERE created_at >= $1 AND created_at < $2 UNION ALL SELECT reason FROM emoji_pack_reports WHERE created_at >= $1 AND created_at < $2) r GROUP BY reason`},
 	} {
 		byReason, total, err := c.countBy(ctx, q.query, day, end)
 		if err != nil {

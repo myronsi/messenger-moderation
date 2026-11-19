@@ -41,7 +41,7 @@ day.
 | `messenger_db_bytes`, `moderation_db_bytes` | Size of the two PostgreSQL databases (point in time) | `pg_database_size` | last day |
 | `media_jobs_waiting` | Media conversions queued or running (point in time) | `media_jobs.state` | last day |
 | `reports_total`, `reports` | Reports against accounts received in the day, total and by reason | `user_reports.created_at`, `reason` | sum |
-| `pack_reports_total`, `pack_reports` | Reports against sticker packs received in the day, total and by reason | `sticker_pack_reports` | sum |
+| `pack_reports_total`, `pack_reports` | Reports against sticker packs and emoji packs received in the day, total and by reason | `sticker_pack_reports`, `emoji_pack_reports` | sum |
 | `decisions_total`, `decisions` | Staff decisions in the day, total and by type | empty until decisions exist (milestone M2) | sum |
 | `median_decision_seconds` | Median time from case opened to decision, for cases decided in the day | empty until cases exist | average of the daily medians |
 | `reversals` | Automatic levels a person reversed in the day | empty until decisions exist | sum |

@@ -130,7 +130,7 @@ func TestStatsEndpointsByRole(t *testing.T) {
 		!strings.Contains(rec.Header().Get("Content-Disposition"), "messenger-moderation-stats-2026-11-18-2026-11-18-by-day.csv") {
 		t.Fatalf("csv: %d %v", rec.Code, rec.Header())
 	}
-	if strings.Contains(rec.Body.String(), "users_total") || !strings.Contains(rec.Body.String(), "2026-11-18,3,1,") {
+	if strings.Contains(rec.Body.String(), "users_total") || !strings.Contains(rec.Body.String(), "2026-11-18,3,2,") {
 		t.Fatalf("moderator csv %q", rec.Body)
 	}
 

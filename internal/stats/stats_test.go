@@ -23,6 +23,7 @@ CREATE TABLE calls (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, started_
 CREATE TABLE media_jobs (state TEXT NOT NULL);
 CREATE TABLE user_reports (reason TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL);
 CREATE TABLE sticker_pack_reports (reason TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE emoji_pack_reports (reason TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL);
 `
 
 const dayCounts = `CREATE TABLE message_day_counts (day DATE NOT NULL, type TEXT NOT NULL, messages BIGINT NOT NULL, attachments BIGINT NOT NULL, PRIMARY KEY (day, type));`
@@ -94,6 +95,7 @@ func seed(t *testing.T, db *pgxpool.Pool) {
 	exec(t, db, `INSERT INTO media_jobs (state) VALUES ('queued'), ('running'), ('done'), ('failed')`)
 	exec(t, db, `INSERT INTO user_reports (reason, created_at) VALUES ('spam', $1), ('spam', $1), ('scam', $2), ('spam', $3)`, at(1, 0), at(20, 0), at(24, 0))
 	exec(t, db, `INSERT INTO sticker_pack_reports (reason, created_at) VALUES ('hate', $1)`, at(5, 0))
+	exec(t, db, `INSERT INTO emoji_pack_reports (reason, created_at) VALUES ('hate', $1), ('spam', $2)`, at(6, 0), at(-1, 0))
 }
 
 type usageStub struct{ days []time.Time }
@@ -140,7 +142,7 @@ func TestCollectRightAfterMidnight(t *testing.T) {
 		"direct_chats_total": 2, "direct_chats_new": 1, "groups_total": 2, "groups_new": 1,
 		"calls": 3, "call_minutes": 36,
 		"storage_bytes": 9000, "media_jobs_waiting": 2,
-		"reports_total": 3, "pack_reports_total": 1, "decisions_total": nil, "median_decision_seconds": nil, "reversals": nil,
+		"reports_total": 3, "pack_reports_total": 2, "decisions_total": nil, "median_decision_seconds": nil, "reversals": nil,
 	})
 	if len(usage.days) != 1 || !usage.days[0].Equal(day) {
 		t.Errorf("usage asked for %v", usage.days)
@@ -154,7 +156,7 @@ func TestCollectRightAfterMidnight(t *testing.T) {
 	if got := r.Breakdown["reports"]; got["spam"] != 2 || got["scam"] != 1 || len(got) != 2 {
 		t.Errorf("reports = %v", got)
 	}
-	if got := r.Breakdown["pack_reports"]; got["hate"] != 1 {
+	if got := r.Breakdown["pack_reports"]; got["hate"] != 2 || got["spam"] != 0 {
 		t.Errorf("pack_reports = %v", got)
 	}
 }
