@@ -83,6 +83,8 @@ of its days is.
 | `daily_stats` | forever | none |
 | `audit_log` | 2 years (a database trigger refuses earlier deletes) | daily, `internal/retention` |
 | `incidents` | 2 years after they ended; open incidents stay | daily, `internal/retention` |
+| `cases` with their `notices` | 2 years after the decision; open cases stay | daily, `internal/retention` |
+| `content_decisions` | 2 years after the decision | daily, `internal/retention` |
 | `service_checks` | 30 days, then one uptime figure per component and day in `service_uptime_daily` (kept) | `internal/status` |
 
-Later milestones add their tables to `retention.Rules`: content copies 6 months, cases 2 years.
+Copies of reported messages and groups live in Messenger's database, which deletes them after 6 months.
