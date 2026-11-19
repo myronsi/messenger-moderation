@@ -118,6 +118,12 @@ In the environment's folder (`/opt/messenger-moderation-staging` or `/opt/messen
 docker compose exec -it moderation /app/moderation create-staff -role admin <username>
 ```
 
+This works after the first deploy, which records the running image in `.env` (`MODERATION_IMAGE`). Before that, use the container directly:
+
+```sh
+sudo docker exec -it <folder name>-moderation-1 /app/moderation create-staff -role admin <username>
+```
+
 It asks for the password and prints the authenticator secret once; add it to an authenticator app right away.
 
 ### 7. Outside check
