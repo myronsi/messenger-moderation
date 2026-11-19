@@ -62,6 +62,18 @@ of its days is.
 
 `GET /api/stats/today` computes today from 00:00 UTC until now, next to yesterday's stored row.
 
+## Console page "Statistics"
+
+- Top: today so far next to all of yesterday, as tiles. Admins see a usage row and a moderation row, moderators
+  the moderation row only.
+- Period (30 days, 90 days, 1 year, 3 years, each ending yesterday) and grouping (day, week, month) pick what the
+  charts show; "Download CSV" downloads exactly that view.
+- Charts: moderation first (account reports and pack reports by reason, decisions by type, median time to
+  decision), then usage for admins (active accounts, new accounts, messages by kind, new chats, call minutes,
+  stored files). Counts are bars, levels are lines. Each section has a "Show as table" view with the same numbers;
+  late periods are marked with `*`.
+- Each reason keeps its colour in every chart and period; unknown reasons are added to "Other".
+
 ## Retention
 
 | Data | Kept | Job |
