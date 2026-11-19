@@ -16,6 +16,9 @@ planning folder), section 0 "Architecture v2".
 | `internal/appdb` | Read-only connection to the Messenger database (`appdbtest` holds the copy of the Messenger tables the tests use) |
 | `internal/review` | Review queue, account page and account search; every call writes a data-access row to the audit log |
 | `internal/httpserver` | HTTP API under `/api`, security headers, same-origin check for changes, console files with SPA fallback; `RequireStaff` and `RequireAdmin` for new routes |
+| `internal/messenger` | Client for messenger-back's internal API (`/internal/v1`): set status, dismiss reports, hide or unhide packs, delete accounts, pack images |
+| `internal/decisions` | Staff actions with a guideline rule and a text for the user, each audited with before and after; cases list and confirm or reverse; pack pages |
+| `internal/cases` | Cases with a 72-hour deadline, opened by a watcher every minute for automatic restricted or suspended levels and packs hidden after reports (last 30 days) |
 | `internal/status` | Status checks every minute, incidents after 3 failures, monitoring gaps, email alerts, `/status.json` (public) and `/api/status` (admins), daily uptime |
 | `internal/testdb` | Test helper: a fresh schema per test in the test PostgreSQL |
 | `console/` | The console UI; its build output in `console/dist` is embedded into the program |
