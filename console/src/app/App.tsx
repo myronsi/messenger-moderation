@@ -4,6 +4,7 @@ import { ThemeProvider } from 'next-themes';
 import { Loader2 } from 'lucide-react';
 import { AccountPage } from '@/pages/account';
 import { CasesRoute } from '@/pages/cases';
+import { ContentReportRoute, ContentReportsRoute } from '@/pages/content-reports';
 import { LoginPage } from '@/pages/login';
 import { PackRoute, PacksRoute } from '@/pages/packs';
 import { PlaceholderPage } from '@/pages/placeholder';
@@ -55,6 +56,8 @@ const App = () => {
             <Route path="/queue" element={<QueuePage />} />
             <Route path="/users/:id" element={<AccountPage isAdmin={session.staff.role === 'admin'} />} />
             <Route path="/cases" element={<CasesRoute />} />
+            <Route path="/content-reports" element={<ContentReportsRoute />} />
+            <Route path="/content-reports/:id" element={<ContentReportRoute />} />
             <Route path="/packs" element={<PacksRoute />} />
             <Route path="/packs/:kind/:id" element={<PackRoute />} />
             <Route path="/statistics" element={<PlaceholderPage title="Statistics" description="Daily numbers and charts." />} />

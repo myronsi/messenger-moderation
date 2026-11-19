@@ -89,3 +89,31 @@ func TestClientCallsTheInternalAPI(t *testing.T) {
 		t.Fatal("a wrong token is an error")
 	}
 }
+
+func TestRemoveMessage(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		got = r.Header.Get("Authorization") + " " + r.Method + " " + r.URL.Path + " " + string(body)
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/internal/v1/chats/70/messages/901/remove" {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			_, _ = w.Write([]byte(`{"error":"validation_failed","message":"system messages cannot be removed"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"chat_id":"70","message_id":"900","sender_id":"2","reason_code":"spam","reason_text":"Ads","already_removed":true}`))
+	}))
+	defer srv.Close()
+	c := messenger.New(srv.URL, "secret", nil)
+	res, err := c.RemoveMessage(context.Background(), 70, 900, "spam", "Ads")
+	if err != nil || !res.AlreadyRemoved || res.SenderID == nil || *res.SenderID != "2" {
+		t.Fatalf("remove %+v %v", res, err)
+	}
+	if got != `Bearer secret POST /internal/v1/chats/70/messages/900/remove {"reason_code":"spam","reason_text":"Ads"}` {
+		t.Fatalf("request %q", got)
+	}
+	var field *messenger.FieldError
+	if _, err := c.RemoveMessage(context.Background(), 70, 901, "spam", "Ads"); !errors.As(err, &field) {
+		t.Fatalf("a 422 is a field error: %v", err)
+	}
+}
