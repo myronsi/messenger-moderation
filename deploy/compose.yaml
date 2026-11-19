@@ -1,5 +1,3 @@
-name: messenger-moderation
-
 services:
   moderation:
     image: ${MODERATION_IMAGE:?set by deploy.sh}

@@ -51,33 +51,49 @@ redeploy Messenger. The port is not published; only containers on the stack's ne
 
 ### 3. Server folder and settings
 
+Staging and production run on the same host, next to the two Messenger stacks. Each environment has its own
+folder, and the folder name is its compose project:
+
+| Environment | Folder | `MODERATION_PORT` | `MESSENGER_NETWORK` |
+|---|---|---|---|
+| production | `/opt/messenger-moderation` | `8090` | `messenger-go_default` (stack in `/opt/messenger-go`) |
+| staging | `/opt/messenger-moderation-staging` | `8091` | `<COMPOSE_PROJECT_NAME of /opt/messenger-staging>_default` |
+
 ```sh
-sudo mkdir -p /opt/messenger-moderation && sudo chown <deploy user> /opt/messenger-moderation
+sudo mkdir -p /opt/messenger-moderation /opt/messenger-moderation-staging
+sudo chown <deploy user> /opt/messenger-moderation /opt/messenger-moderation-staging
+docker network ls
 ```
 
-After the first workflow run uploaded `env.example`, copy it to `/opt/messenger-moderation/.env` (mode 600) and
-fill it in: the two database URLs, `ENCRYPTION_KEY` (`openssl rand -base64 32`), the internal token, the
-environment name and origin, SMTP and `ALERT_EMAIL`. `MESSENGER_NETWORK` in the environment of `deploy.sh`
-defaults to `messenger-go_default`, the network of the Messenger compose project; check it with
-`docker network ls`.
+Create `.env` in each folder (mode 600) from `deploy/env.example`: port, network, the two database URLs,
+`ENCRYPTION_KEY` (`openssl rand -base64 32`), the internal token, the environment name and origin, SMTP and
+`ALERT_EMAIL`. Compose reads `MODERATION_PORT` and `MESSENGER_NETWORK` from that file too.
 
 ### 4. nginx
 
-Route the console's host name to the container, which listens on `127.0.0.1:8090`:
+nginx terminates TLS behind the PROXY protocol listener of the static sites, so the visitor's address is
+`$proxy_protocol_addr`. Replace the two static moderation server blocks with:
 
 ```nginx
 server {
-    server_name moderation.messenger.viserix.com;
+    listen 127.0.0.1:8443 ssl proxy_protocol;
+    http2 on;
+    server_name moderation.staging.messenger.viserix.com;
+    ssl_certificate /etc/letsencrypt/live/messenger-static-sites/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/messenger-static-sites/privkey.pem;
+    client_max_body_size 1m;
     location / {
-        proxy_pass http://127.0.0.1:8090;
+        proxy_pass http://127.0.0.1:8091;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $remote_addr;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_protocol_addr;
+        proxy_set_header X-Forwarded-Proto https;
     }
 }
 ```
 
-(staging: `moderation.staging.messenger.viserix.com`). TLS as for the other sites.
+and the same for `moderation.messenger.viserix.com` with port `8090`.
 
 ### 5. GitHub environments
 
@@ -90,14 +106,16 @@ In the repository settings, environments `staging` and `production`, add:
 | `DEPLOY_SSH_KEY` | Private key of that user |
 | `DEPLOY_SSH_KNOWN_HOSTS` | `ssh-keyscan <host>` output |
 
-Optional variable `DEPLOY_PATH` if the folder is not `/opt/messenger-moderation`. The old `SSH_KEY` secret of
-the static page is no longer used and can be removed.
+Environment **variable** `DEPLOY_PATH`: set it to `/opt/messenger-moderation-staging` in `staging`; production
+uses the default `/opt/messenger-moderation`. The old `SSH_KEY` secret of the static page is no longer used and
+can be removed.
 
 ### 6. First admin
 
+In the environment's folder (`/opt/messenger-moderation-staging` or `/opt/messenger-moderation`):
+
 ```sh
-cd /opt/messenger-moderation
-MODERATION_IMAGE=<image> docker compose run --rm moderation create-staff -role admin <username>
+docker compose exec -it moderation /app/moderation create-staff -role admin <username>
 ```
 
 It asks for the password and prints the authenticator secret once; add it to an authenticator app right away.
