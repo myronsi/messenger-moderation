@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, Flag, ShieldAlert } from 'lucide-react';
-import { causeLabel, CONTEXT_LABELS, reasonLabel, StatusBadge } from '@/entities/moderation';
+import { causeLabel, CONTEXT_LABELS, reasonLabel, ruleLabel, StatusBadge } from '@/entities/moderation';
 import { type AccountProfile, type StatusChange, type UserReport } from '@/shared/api/review';
 import { cn } from '@/shared/lib/utils';
 import { formatAge, formatDateTime } from '@/shared/lib/time';
@@ -39,10 +39,12 @@ function StatusEntry({ change }: { change: StatusChange }) {
       <ArrowRight aria-label="to" className="size-4 text-muted-foreground" />
       <StatusBadge status={change.to_status} />
       <span>{causeLabel(change.cause)}</span>
+      {change.reason_code && <span className="text-muted-foreground">· {ruleLabel(change.reason_code)}</span>}
       <span className="text-muted-foreground">score {change.score.toLocaleString('en-GB', { maximumFractionDigits: 2 })}</span>
       <time dateTime={change.created_at} className="ml-auto text-xs text-muted-foreground">
         {formatDateTime(change.created_at)}
       </time>
+      {change.reason_text && <p className="w-full whitespace-pre-line text-muted-foreground">{change.reason_text}</p>}
     </article>
   );
 }
@@ -56,8 +58,9 @@ interface ReportEntryProps {
 function ReportEntry({ report, current, accountHref }: ReportEntryProps) {
   const diff = snapshotDiff(report, current);
   const withdrawn = report.withdrawn_at !== null;
+  const dismissed = !!report.dismissed_at;
   return (
-    <article aria-label={`Report: ${reasonLabel(report.reason)}`} className={cn('rounded-md border bg-card p-3 text-sm', withdrawn && 'opacity-70')}>
+    <article aria-label={`Report: ${reasonLabel(report.reason)}`} className={cn('rounded-md border bg-card p-3 text-sm', (withdrawn || dismissed) && 'opacity-70')}>
       <div className="flex flex-wrap items-center gap-2">
         <Flag aria-hidden className="size-4 text-destructive" />
         <span className="font-medium">{reasonLabel(report.reason)}</span>
@@ -67,6 +70,7 @@ function ReportEntry({ report, current, accountHref }: ReportEntryProps) {
         </Link>
         {report.reporter.status !== 'good' && <StatusBadge status={report.reporter.status} />}
         {withdrawn && <span className="rounded bg-muted px-1.5 text-xs">Withdrawn</span>}
+        {dismissed && <span className="rounded bg-muted px-1.5 text-xs">Dismissed</span>}
         <time dateTime={report.created_at} className="ml-auto text-xs text-muted-foreground">
           {formatDateTime(report.created_at)}
         </time>

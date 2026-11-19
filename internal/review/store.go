@@ -69,6 +69,9 @@ type CurrentStatus struct {
 	ProbationUntil     *time.Time `json:"probation_until"`
 	AppealBlockedUntil *time.Time `json:"appeal_blocked_until"`
 	LastAppealAt       *time.Time `json:"last_appeal_at"`
+	DecidedBy          string     `json:"decided_by"`
+	ReasonCode         *string    `json:"reason_code"`
+	ReasonText         *string    `json:"reason_text"`
 }
 
 type StatusChange struct {
@@ -77,6 +80,8 @@ type StatusChange struct {
 	ToStatus   string    `json:"to_status"`
 	Score      float64   `json:"score"`
 	Cause      string    `json:"cause"`
+	ReasonCode *string   `json:"reason_code"`
+	ReasonText *string   `json:"reason_text"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
@@ -95,6 +100,7 @@ type Report struct {
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 	WithdrawnAt *time.Time      `json:"withdrawn_at"`
+	DismissedAt *time.Time      `json:"dismissed_at"`
 }
 
 type Account struct {
@@ -128,7 +134,7 @@ WITH reviews AS (
            array_agg(DISTINCT r.reason ORDER BY r.reason)::text[] AS reasons
     FROM user_reports r
     LEFT JOIN reviews v ON v.user_id = r.target_id
-    WHERE r.withdrawn_at IS NULL AND (v.reviewed_at IS NULL OR r.created_at > v.reviewed_at)
+    WHERE r.withdrawn_at IS NULL AND r.dismissed_at IS NULL AND (v.reviewed_at IS NULL OR r.created_at > v.reviewed_at)
     GROUP BY r.target_id
 ), heavy AS (
     SELECT m.user_id, m.status_since
@@ -217,11 +223,12 @@ func (s *Store) Account(ctx context.Context, userID int64) (Account, error) {
 SELECT u.id, u.username, u.display_name, u.created_at, u.bio, u.last_seen_at,
        coalesce(m.status, 'good'), coalesce(m.score, 0)::float8,
        CASE WHEN m.status_since > 'epoch' THEN m.status_since END,
-       m.probation_until, m.appeal_blocked_until, m.last_appeal_at
+       m.probation_until, m.appeal_blocked_until, m.last_appeal_at,
+       coalesce(m.decided_by, 'automatic'), m.reason_code, m.reason_text
 FROM users u LEFT JOIN user_moderation m ON m.user_id = u.id
 WHERE u.id = $1`, userID).Scan(&a.User.ID, &a.User.Username, &a.User.DisplayName, &a.User.CreatedAt, &a.User.Bio,
 			&a.User.LastSeenAt, &a.Status.Status, &a.Status.Score, &a.Status.Since, &a.Status.ProbationUntil,
-			&a.Status.AppealBlockedUntil, &a.Status.LastAppealAt)
+			&a.Status.AppealBlockedUntil, &a.Status.LastAppealAt, &a.Status.DecidedBy, &a.Status.ReasonCode, &a.Status.ReasonText)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -229,14 +236,14 @@ WHERE u.id = $1`, userID).Scan(&a.User.ID, &a.User.Username, &a.User.DisplayName
 			return err
 		}
 		rows, err := tx.Query(ctx, `
-SELECT id, from_status, to_status, score::float8, cause, created_at
+SELECT id, from_status, to_status, score::float8, cause, reason_code, reason_text, created_at
 FROM user_moderation_events WHERE user_id = $1 ORDER BY created_at DESC, id DESC`, userID)
 		if err != nil {
 			return err
 		}
 		a.History, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (StatusChange, error) {
 			var c StatusChange
-			err := row.Scan(&c.ID, &c.FromStatus, &c.ToStatus, &c.Score, &c.Cause, &c.CreatedAt)
+			err := row.Scan(&c.ID, &c.FromStatus, &c.ToStatus, &c.Score, &c.Cause, &c.ReasonCode, &c.ReasonText, &c.CreatedAt)
 			return c, err
 		})
 		if err != nil {
@@ -244,7 +251,7 @@ FROM user_moderation_events WHERE user_id = $1 ORDER BY created_at DESC, id DESC
 		}
 		rows, err = tx.Query(ctx, `
 SELECT r.reporter_id, ru.username, ru.display_name, ru.created_at, coalesce(rm.status, 'good'),
-       r.reason, r.note, r.context, r.weight::float8, r.snapshot, r.created_at, r.updated_at, r.withdrawn_at
+       r.reason, r.note, r.context, r.weight::float8, r.snapshot, r.created_at, r.updated_at, r.withdrawn_at, r.dismissed_at
 FROM user_reports r
 JOIN users ru ON ru.id = r.reporter_id
 LEFT JOIN user_moderation rm ON rm.user_id = r.reporter_id
@@ -257,7 +264,7 @@ ORDER BY r.created_at DESC, r.reporter_id`, userID)
 			var r Report
 			var snapshot []byte
 			err := row.Scan(&r.Reporter.ID, &r.Reporter.Username, &r.Reporter.DisplayName, &r.Reporter.CreatedAt,
-				&r.Reporter.Status, &r.Reason, &r.Note, &r.Context, &r.Weight, &snapshot, &r.CreatedAt, &r.UpdatedAt, &r.WithdrawnAt)
+				&r.Reporter.Status, &r.Reason, &r.Note, &r.Context, &r.Weight, &snapshot, &r.CreatedAt, &r.UpdatedAt, &r.WithdrawnAt, &r.DismissedAt)
 			r.Snapshot = snapshot
 			return r, err
 		})

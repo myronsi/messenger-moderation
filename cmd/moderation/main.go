@@ -16,11 +16,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/myronsi/messenger-moderation/console"
 	"github.com/myronsi/messenger-moderation/internal/appdb"
+	"github.com/myronsi/messenger-moderation/internal/cases"
 	"github.com/myronsi/messenger-moderation/internal/config"
 	"github.com/myronsi/messenger-moderation/internal/db"
+	"github.com/myronsi/messenger-moderation/internal/decisions"
 	"github.com/myronsi/messenger-moderation/internal/httpserver"
+	"github.com/myronsi/messenger-moderation/internal/messenger"
 	"github.com/myronsi/messenger-moderation/internal/review"
 	"github.com/myronsi/messenger-moderation/internal/staff"
 	"github.com/myronsi/messenger-moderation/internal/status"
@@ -81,8 +86,9 @@ func serve(cfg config.Config, log *slog.Logger) error {
 		return err
 	}
 	var reviewStore *review.Store
+	var appPool *pgxpool.Pool
 	if cfg.Messenger.ReadDatabaseURL != "" {
-		appPool, err := appdb.Open(ctx, cfg.Messenger.ReadDatabaseURL)
+		appPool, err = appdb.Open(ctx, cfg.Messenger.ReadDatabaseURL)
 		if err != nil {
 			return err
 		}
@@ -96,7 +102,12 @@ func serve(cfg config.Config, log *slog.Logger) error {
 	} else {
 		log.Warn("MESSENGER_READ_DATABASE_URL is not set; queue, account pages and search answer 503")
 	}
-	reviewSvc := review.NewService(reviewStore, pool, nil)
+	caseStore := cases.NewStore(pool, appPool, log)
+	decisionSvc := decisions.NewService(pool, appPool, messenger.New(cfg.Messenger.InternalURL, cfg.Messenger.InternalToken, nil), caseStore, log)
+	reviewSvc := review.NewService(reviewStore, pool, decisionSvc.Reviews)
+	if cfg.Messenger.InternalURL == "" {
+		log.Warn("MESSENGER_INTERNAL_URL is not set; decisions answer 503")
+	}
 
 	reporter := status.NewReporter(pool)
 	monitor := status.NewMonitor(pool, status.Options{
@@ -108,9 +119,13 @@ func serve(cfg config.Config, log *slog.Logger) error {
 		Register: func(mux *http.ServeMux, s *httpserver.Server) {
 			status.Register(mux, s, reporter, cfg.Status.PublicOrigins)
 			review.Register(mux, s, reviewSvc, log)
+			decisions.Register(mux, s, decisionSvc, log)
 		},
 	})
 	go monitor.Run(ctx)
+	if appPool != nil {
+		go caseStore.Run(ctx, time.Minute)
+	}
 	srv := &http.Server{
 		Addr: cfg.Addr, Handler: handler,
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 120 * time.Second,

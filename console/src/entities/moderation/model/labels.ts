@@ -37,7 +37,21 @@ const CAUSE_LABELS: Record<string, string> = {
   appeal: 'Appeal by the user',
   probation_passed: 'Probation passed',
   probation_failed: 'Probation failed',
+  manual: 'Decision by staff',
+  dismissed: 'Reports dismissed',
 };
+
+export const RULE_LABELS: Record<string, string> = {
+  spam: 'Spam',
+  scam: 'Scam or fraud',
+  harassment: 'Harassment',
+  impersonation: 'Impersonation',
+  inappropriate_profile: 'Inappropriate profile',
+  illegal: 'Illegal content',
+  other: 'Other',
+};
+
+export const ruleLabel = (rule: string | null | undefined) => (rule ? RULE_LABELS[rule] ?? rule : '');
 
 export const causeLabel = (cause: string) => CAUSE_LABELS[cause] ?? cause;
 

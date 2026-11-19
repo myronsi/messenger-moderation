@@ -36,6 +36,7 @@ its grant here, in the same change.
 | Feature | Grants |
 |---|---|
 | Review queue, account page, search | `GRANT SELECT (id, username, display_name, bio, created_at, last_seen_at) ON users TO moderation_reader;`<br>`GRANT SELECT ON user_reports, user_moderation, user_moderation_events TO moderation_reader;` |
+| Decisions, cases and pack pages (M2) | `GRANT SELECT (id, owner_id, builtin_key, title, slug, hidden_at, hidden_by, deleted_at, created_at) ON sticker_packs TO moderation_reader;`<br>`GRANT SELECT (id, pack_id, attachment_id, emoji, position, is_animated, deleted_at) ON stickers TO moderation_reader;`<br>`GRANT SELECT (pack_id, reporter_id, reason, created_at) ON sticker_pack_reports TO moderation_reader;`<br>`GRANT SELECT (id, owner_id, chat_id, title, slug, hidden_at, hidden_by, deleted_at, created_at) ON emoji_packs TO moderation_reader;`<br>`GRANT SELECT (id, pack_id, attachment_id, shortcode, position, is_animated, deleted_at) ON custom_emoji TO moderation_reader;`<br>`GRANT SELECT (pack_id, reporter_id, reason, created_at) ON emoji_pack_reports TO moderation_reader;`<br>The decision columns of `user_moderation` and `user_moderation_events` and `user_reports.dismissed_at` are covered by the table grants above. |
 
 Check what the reader can see:
 
