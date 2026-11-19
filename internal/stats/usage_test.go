@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,7 +20,8 @@ func TestUsageClient(t *testing.T) {
 		_, _ = w.Write([]byte(`{"day":"2026-11-18","active_day":7,"active_30d":30,"storage_bytes":9000}`))
 	}))
 	defer srv.Close()
-	c := stats.NewUsageClient(srv.URL+"/", "0123456789abcdef0123456789abcdef")
+	token := strings.Repeat("t", 32)
+	c := stats.NewUsageClient(srv.URL+"/", token)
 	u, err := c.Usage(context.Background(), time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +30,7 @@ func TestUsageClient(t *testing.T) {
 		t.Fatalf("usage %+v", u)
 	}
 	if seen.URL.Path != "/internal/v1/stats/usage" || seen.URL.Query().Get("day") != "2026-11-18" ||
-		seen.Header.Get("Authorization") != "Bearer 0123456789abcdef0123456789abcdef" {
+		seen.Header.Get("Authorization") != "Bearer "+token {
 		t.Fatalf("request %s %v", seen.URL, seen.Header)
 	}
 	status = http.StatusServiceUnavailable

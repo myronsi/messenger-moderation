@@ -31,7 +31,7 @@ func newServer(t *testing.T) server {
 	seed(t, m)
 	pool, _ := testdb.New(t)
 	ctx := context.Background()
-	svc, err := staff.NewService(pool, []byte("0123456789abcdef0123456789abcdef"), 12*time.Hour)
+	svc, err := staff.NewService(pool, []byte(strings.Repeat("k", 32)), 12*time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
