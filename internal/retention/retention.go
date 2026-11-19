@@ -25,6 +25,8 @@ type Rule struct {
 var Rules = []Rule{
 	{Name: "audit log", Table: "audit_log", Column: "created_at", Keep: "2 years"},
 	{Name: "incidents", Table: "incidents", Column: "ended_at", Keep: "2 years"},
+	{Name: "cases", Table: "cases", Column: "decided_at", Keep: "2 years"},
+	{Name: "content decisions", Table: "content_decisions", Column: "decided_at", Keep: "2 years"},
 }
 
 const batch = 5000
