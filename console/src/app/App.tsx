@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ThemeProvider } from 'next-themes';
 import { Loader2 } from 'lucide-react';
+import { AccountPage } from '@/pages/account';
 import { LoginPage } from '@/pages/login';
 import { PlaceholderPage } from '@/pages/placeholder';
+import { QueuePage } from '@/pages/queue';
 import { StatusPage } from '@/pages/status';
 import { ApiError, fetchMe, fetchMeta, signOut, type Meta, type Staff } from '@/shared/api/client';
 import { Shell } from '@/widgets/shell';
@@ -48,7 +50,8 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Navigate to={session.staff.role === 'admin' ? '/status' : '/queue'} replace />} />
             <Route path="/status" element={<StatusPage />} />
-            <Route path="/queue" element={<PlaceholderPage title="Queue" description="Reported accounts waiting for review." />} />
+            <Route path="/queue" element={<QueuePage />} />
+            <Route path="/users/:id" element={<AccountPage />} />
             <Route path="/statistics" element={<PlaceholderPage title="Statistics" description="Daily numbers and charts." />} />
             <Route path="/staff" element={<PlaceholderPage title="Staff" description="Staff accounts and roles." />} />
             <Route path="*" element={<PlaceholderPage title="Not found" description="This page does not exist." />} />

@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LogOut, ShieldCheck } from 'lucide-react';
+import { UserSearch } from '@/features/user-search';
 import type { Meta, Staff } from '@/shared/api/client';
+import { accountPath } from '@/shared/config/routes';
 import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { NAV_ITEMS } from './navItems';
@@ -32,12 +34,18 @@ const Shell = ({ staff, meta, onSignOut, children }: ShellProps) => (
             {meta.environment}
           </span>
         )}
-        <div className="flex-1" />
+        <div className="hidden flex-1 justify-center md:flex">
+          <UserSearch accountHref={accountPath} />
+        </div>
+        <div className="flex-1 md:hidden" />
         <span className="hidden text-sm text-muted-foreground sm:inline">{staff.username} · {staff.role}</span>
         <Button variant="ghost" size="sm" onClick={onSignOut}>
           <LogOut aria-hidden="true" />
           Sign out
         </Button>
+      </div>
+      <div className="px-3 pb-2 md:hidden">
+        <UserSearch accountHref={accountPath} />
       </div>
       <nav aria-label="Sections" className="flex gap-1 overflow-x-auto px-3 pb-2 md:hidden">
         {NAV_ITEMS.filter((item) => !item.adminOnly || staff.role === 'admin').map((item) => (
