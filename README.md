@@ -19,7 +19,8 @@ planning folder), section 0 "Architecture v2".
 | `internal/messenger` | Client for messenger-back's internal API (`/internal/v1`): set status, dismiss reports, hide or unhide packs, delete accounts, pack images |
 | `internal/decisions` | Staff actions with a guideline rule and a text for the user, each audited with before and after; cases list and confirm or reverse; pack pages |
 | `internal/content` | Reported messages and groups: list (one row per reported item), the report page with the copy taken at report time, remove a message through Messenger's internal API, close without action; every view and decision audited |
-| `internal/cases` | Cases with a 72-hour deadline, opened by a watcher every minute for automatic restricted or suspended levels and packs hidden after reports (last 30 days) |
+| `internal/cases` | Cases with a 72-hour deadline, opened by a watcher every minute for automatic restricted or suspended levels, packs hidden after reports (last 30 days) and users' requests for a review by a person |
+| `internal/notices` | Notices of illegal content that arrived by email: entered by staff as cases, decided with an outcome, and the decision emailed to the notifier when they gave an address |
 | `internal/status` | Status checks every minute, incidents after 3 failures, monitoring gaps, email alerts, `/status.json` (public) and `/api/status` (admins), daily uptime |
 | `internal/testdb` | Test helper: a fresh schema per test in the test PostgreSQL |
 | `console/` | The console UI; its build output in `console/dist` is embedded into the program |
@@ -44,7 +45,7 @@ planning folder), section 0 "Architecture v2".
 | `LIVEKIT_HEALTH_URL` | empty | LiveKit, when calls are on |
 | `CHECK_INTERVAL` | `1m` | How often the status checks run |
 | `STATUS_CORS_ORIGINS` | empty | Sites allowed to read `/status.json`, for example the help site |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | port 587 | Mail server for alerts |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | port 587 | Mail server for alerts and for replies to notifiers; without `SMTP_HOST` and `SMTP_FROM` no reply is sent and the console says to reply by hand |
 | `ALERT_EMAIL` | empty | Where incident alerts go; needs `SMTP_HOST` and `SMTP_FROM` |
 
 ## Messenger database access
@@ -73,6 +74,21 @@ All routes need a staff session (cookie `mod_session`); moderators and admins ma
 | `POST /api/content-reports/{id}/dismiss` | `{note?}`: closes the item without action; nobody in Messenger is told | `content_report.dismissed`, target `content_report` |
 
 Staff decisions arrive with M2; until then no account counts as reviewed.
+
+### Cases, review requests and notices
+
+| Route | What | Audit action |
+|---|---|---|
+| `GET /api/cases?state=open\|decided&kind=` | Open cases by deadline, or decided cases newest first. `kind`: `account_status` (automatic heavy level), `pack_hidden`, `review_request` (with `request_text`), `notice` (with `notice`: notifier, contact email, what, where, why illegal, received time, outcome, email state) | `cases.viewed` |
+| `POST /api/cases/{id}/confirm`, `POST /api/cases/{id}/reverse` | For a review request: keep the account's current status, or set a lower one, as a decision by a person with a rule and a text the user sees in the app | `user.status_set` |
+| `POST /api/notices` | Enter a notice that arrived by email: `notifier_name`, optional `notifier_email`, `content`, `location`, `explanation`, `received_at` (RFC 3339, within the last year), optional `user_id`; the deadline is 72 hours after `received_at` | `notice.created` (no email address in the log) |
+| `POST /api/cases/{id}/notice-decision` | `outcome` (`action_taken` or `no_violation`), `reason_code`, `reason_text` (sent to the notifier). Answers `mail_state`: `pending` (sent within a minute, retried with growing delays, `failed` after 6 attempts), `none` (no address) or `skipped` (no SMTP) | `notice.decided` |
+| `GET /api/notices/settings` | `{"mail_enabled"}` | none |
+
+Review requests are read from Messenger's `account_review_requests`. A request closes in Messenger when the
+status returns to `good` on its own; the watcher then closes its case as superseded. Any status decision on the
+account (from the case or the account page) closes its open review request case. Act on the account of a notice
+from the account page first, then record the notice's outcome.
 
 ## Commands
 

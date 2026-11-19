@@ -152,7 +152,7 @@ func (h *Handler) cases(w http.ResponseWriter, r *http.Request) {
 		httpserver.WriteError(w, http.StatusBadRequest, "invalid_request", "state must be open or decided")
 		return
 	}
-	list, err := h.svc.Cases(r.Context(), current(r), state != "decided")
+	list, err := h.svc.Cases(r.Context(), current(r), state != "decided", r.URL.Query().Get("kind"))
 	if err != nil {
 		h.fail(w, r, err)
 		return

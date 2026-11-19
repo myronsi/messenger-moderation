@@ -29,6 +29,23 @@ export interface DismissResult extends StatusChangeResult {
 
 export type PackKind = 'sticker_pack' | 'emoji_pack';
 export type CaseState = 'open' | 'confirmed' | 'reversed' | 'superseded';
+export const CASE_KINDS = ['account_status', 'pack_hidden', 'review_request', 'notice'] as const;
+export type CaseKind = (typeof CASE_KINDS)[number];
+export type NoticeOutcome = 'action_taken' | 'no_violation';
+export type NoticeMailState = 'none' | 'pending' | 'sent' | 'failed' | 'skipped';
+
+export interface NoticeDetails {
+  notifier_name: string;
+  notifier_email: string | null;
+  content: string;
+  location: string;
+  explanation: string;
+  received_at: string;
+  entered_by: string;
+  outcome: NoticeOutcome | null;
+  mail_state: NoticeMailState;
+  mail_sent_at: string | null;
+}
 
 export interface CaseSubject {
   id: string;
@@ -41,7 +58,7 @@ export interface CaseSubject {
 
 export interface ModerationCase {
   id: string;
-  kind: 'account_status' | 'pack_hidden';
+  kind: CaseKind;
   user_id?: string;
   pack_kind?: PackKind;
   pack_id?: string;
@@ -54,6 +71,8 @@ export interface ModerationCase {
   decided_by: string | null;
   reason_code: DecisionRule | null;
   reason_text: string | null;
+  request_text?: string;
+  notice?: NoticeDetails;
   subject?: CaseSubject | null;
 }
 
@@ -107,7 +126,7 @@ export interface DecisionsApi {
   setStatus(userId: string, status: AccountStatus, reason: Reason): Promise<StatusChangeResult>;
   dismissReports(userId: string, reason: Reason, reporterIds?: string[]): Promise<DismissResult>;
   deleteAccount(userId: string, reason: Reason): Promise<void>;
-  cases(state: 'open' | 'decided'): Promise<ModerationCase[]>;
+  cases(state: 'open' | 'decided', kind?: CaseKind): Promise<ModerationCase[]>;
   confirmCase(caseId: string, reason: Reason): Promise<void>;
   reverseCase(caseId: string, reason: Reason, status?: AccountStatus): Promise<void>;
   packs(): Promise<ReportedPack[]>;
@@ -120,7 +139,8 @@ export const decisionsApi: DecisionsApi = {
   dismissReports: (userId, reason, reporterIds) =>
     api.post(`${user(userId)}/reports/dismiss`, reporterIds ? { ...reason, reporter_ids: reporterIds } : reason),
   deleteAccount: (userId, reason) => api.del(user(userId), reason),
-  cases: (state) => api.get<{ cases: ModerationCase[] }>(`/api/cases?state=${state}`).then((result) => result.cases),
+  cases: (state, kind) =>
+    api.get<{ cases: ModerationCase[] }>(`/api/cases?state=${state}${kind ? `&kind=${kind}` : ''}`).then((result) => result.cases),
   confirmCase: (caseId, reason) => api.post(`/api/cases/${encodeURIComponent(caseId)}/confirm`, reason),
   reverseCase: (caseId, reason, status) =>
     api.post(`/api/cases/${encodeURIComponent(caseId)}/reverse`, status ? { ...reason, status } : reason),

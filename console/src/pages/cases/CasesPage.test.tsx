@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import type { ModerationCase } from '@/shared/api/decisions';
+import type { CaseKind, ModerationCase } from '@/shared/api/decisions';
 import { NOW } from '@/test/moderationFixtures';
 import CasesPage from './CasesPage';
 import { deadlineText } from './model/deadline';
@@ -38,18 +38,23 @@ const packCase: ModerationCase = {
   subject: { id: '4', title: 'Faces', hidden: true },
 };
 
-const setup = (open: ModerationCase[], decided: ModerationCase[] = []) => {
+const setup = (open: ModerationCase[], decided: ModerationCase[] = [], mailEnabled = true) => {
   const api = {
-    cases: vi.fn(async (state: 'open' | 'decided') => (state === 'open' ? open : decided)),
+    cases: vi.fn(async (state: 'open' | 'decided', _kind?: CaseKind) => (state === 'open' ? open : decided)),
     confirmCase: vi.fn(async () => undefined),
     reverseCase: vi.fn(async () => undefined),
   };
+  const notices = {
+    settings: vi.fn(async () => ({ mail_enabled: mailEnabled })),
+    create: vi.fn(async () => ({ id: '99' })),
+    decide: vi.fn(async () => ({ mail_state: 'pending' as const })),
+  };
   render(
     <MemoryRouter>
-      <CasesPage api={api} accountHref={(id) => `/users/${id}`} packHref={(kind, id) => `/packs/${kind}/${id}`} now={() => NOW} />
+      <CasesPage api={api} notices={notices} accountHref={(id) => `/users/${id}`} packHref={(kind, id) => `/packs/${kind}/${id}`} now={() => NOW} />
     </MemoryRouter>,
   );
-  return { api, user: userEvent.setup() };
+  return { api, notices, user: userEvent.setup() };
 };
 
 describe('CasesPage', () => {
