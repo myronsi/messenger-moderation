@@ -28,8 +28,8 @@ import (
 	"github.com/myronsi/messenger-moderation/internal/httpserver"
 	"github.com/myronsi/messenger-moderation/internal/messenger"
 	"github.com/myronsi/messenger-moderation/internal/notices"
-	"github.com/myronsi/messenger-moderation/internal/review"
 	"github.com/myronsi/messenger-moderation/internal/retention"
+	"github.com/myronsi/messenger-moderation/internal/review"
 	"github.com/myronsi/messenger-moderation/internal/staff"
 	"github.com/myronsi/messenger-moderation/internal/stats"
 	"github.com/myronsi/messenger-moderation/internal/status"
@@ -106,7 +106,7 @@ func serve(cfg config.Config, log *slog.Logger) error {
 		cancel()
 		reviewStore = review.NewStore(appPool)
 	} else {
-		log.Warn("MESSENGER_READ_DATABASE_URL is not set; queue, account pages and search answer 503")
+		log.Warn("MESSENGER_READ_DATABASE_URL is not set; queue, account pages and search answer 503, no daily statistics")
 	}
 	caseStore := cases.NewStore(pool, appPool, log)
 	messengerClient := messenger.New(cfg.Messenger.InternalURL, cfg.Messenger.InternalToken, nil)
@@ -125,17 +125,8 @@ func serve(cfg config.Config, log *slog.Logger) error {
 	monitor := status.NewMonitor(pool, status.Options{
 		Probes: statusProbes(cfg, pool.Ping), Notifier: alertNotifier(cfg), Log: log, Interval: cfg.Status.Interval,
 	})
-	messengerDB, err := openMessenger(ctx, cfg)
-	if err != nil {
-		return err
-	}
-	if messengerDB != nil {
-		defer messengerDB.Close()
-	} else {
-		log.Warn("MESSENGER_READ_DATABASE_URL is not set: no daily statistics")
-	}
 	statsStore := stats.NewStore(pool)
-	collector := newCollector(cfg, messengerDB, statsStore)
+	collector := newCollector(cfg, appPool, statsStore)
 	statsHandlers := &stats.Handlers{Store: statsStore, Collector: collector, Log: log}
 	handler := httpserver.New(httpserver.Deps{
 		Staff: staffSvc, PublicOrigin: cfg.PublicOrigin, TrustProxy: cfg.TrustProxy, Environment: cfg.Environment, Version: version,
@@ -203,11 +194,7 @@ func openMessenger(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error
 	if cfg.Messenger.ReadDatabaseURL == "" {
 		return nil, nil
 	}
-	pool, err := db.Open(ctx, cfg.Messenger.ReadDatabaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("messenger database: %w", err)
-	}
-	return pool, nil
+	return appdb.Open(ctx, cfg.Messenger.ReadDatabaseURL)
 }
 
 func newCollector(cfg config.Config, messengerDB *pgxpool.Pool, store *stats.Store) *stats.Collector {
