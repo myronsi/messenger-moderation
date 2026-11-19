@@ -57,11 +57,8 @@ func TestCollectNeedsOnlyTheReadGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reader.Close()
-	if _, err := reader.Exec(ctx, "SELECT count(*) FROM user_sessions WHERE user_id = 1 AND last_active_at IS NOT NULL"); err != nil {
-		t.Fatalf("granted columns: %v", err)
-	}
-	exec(t, m, "ALTER TABLE user_sessions ADD COLUMN refresh_token_hash TEXT")
-	if _, err := reader.Exec(ctx, "SELECT refresh_token_hash FROM user_sessions"); err == nil {
+	exec(t, m, "ALTER TABLE users ADD COLUMN password_hash TEXT")
+	if _, err := reader.Exec(ctx, "SELECT password_hash FROM users"); err == nil {
 		t.Fatal("the reader can read a column it was not granted")
 	}
 
@@ -70,5 +67,5 @@ func TestCollectNeedsOnlyTheReadGrants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collect as the reader: %v", err)
 	}
-	want(t, r, map[string]any{"users_total": 4, "users_active_day": 1, "messages": 0, "calls": 3, "files_bytes": 3500, "reports_total": 3})
+	want(t, r, map[string]any{"users_total": 4, "users_new": 2, "messages": 0, "calls": 3, "media_jobs_waiting": 2, "reports_total": 3, "pack_reports_total": 1})
 }

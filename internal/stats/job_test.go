@@ -18,7 +18,7 @@ func TestJobWritesEachDayOnceAndRerunOverwrites(t *testing.T) {
 	store := stats.NewStore(pool)
 	now := at(24, 5)
 	clock := func() time.Time { return now }
-	job := &stats.Job{Collector: &stats.Collector{Messenger: m, Moderation: store, Now: clock}, Store: store, Now: clock}
+	job := &stats.Job{Collector: &stats.Collector{Messenger: m, Moderation: store, Usage: &usageStub{}, Now: clock}, Store: store, Now: clock}
 	ctx := context.Background()
 
 	if n, err := job.RunOnce(ctx); err != nil || n != 1 {
@@ -32,7 +32,7 @@ func TestJobWritesEachDayOnceAndRerunOverwrites(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("rows %v %v", rows, err)
 	}
-	want(t, rows[0], map[string]any{"users_new": 2, "users_active_day": 1, "reports_total": 3})
+	want(t, rows[0], map[string]any{"users_new": 2, "users_active_day": 7, "reports_total": 3})
 	if rows[0].Breakdown["reports"]["spam"] != 2 {
 		t.Fatalf("stored breakdown %v", rows[0].Breakdown)
 	}
@@ -41,7 +41,7 @@ func TestJobWritesEachDayOnceAndRerunOverwrites(t *testing.T) {
 		t.Fatalf("rerun: %d %v", n, err)
 	}
 	rows, _ = store.Range(ctx, day, day)
-	want(t, rows[0], map[string]any{"users_new": 3, "users_active_day": 1})
+	want(t, rows[0], map[string]any{"users_new": 3, "users_active_day": 7})
 
 	now = at(24*4+1, 0)
 	if n, err := job.RunOnce(ctx); err != nil || n != 3 {

@@ -17,14 +17,10 @@ type Querier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-type Storage interface {
-	StorageBytes(ctx context.Context) (int64, error)
-}
-
 type Collector struct {
 	Messenger  Querier
 	Moderation *Store
-	Storage    Storage
+	Usage      UsageSource
 	Now        func() time.Time
 }
 
@@ -162,14 +158,11 @@ func (c *Collector) countBy(ctx context.Context, query string, args ...any) (map
 	return out, total, rows.Err()
 }
 
-func (c *Collector) snapshot(ctx context.Context, r Row, day, end time.Time) error {
+func (c *Collector) snapshot(ctx context.Context, r Row, day, _ time.Time) error {
 	if err := c.scan(ctx, r, `SELECT
-		(SELECT count(DISTINCT user_id) FROM user_sessions WHERE last_active_at >= $1),
-		(SELECT count(DISTINCT user_id) FROM user_sessions WHERE last_active_at >= $2::timestamptz - interval '30 days'),
-		(SELECT coalesce(sum(size), 0)::bigint FROM attachments),
 		(SELECT count(*) FROM media_jobs WHERE state IN ('queued', 'running')),
 		pg_database_size(current_database())`,
-		[]string{"users_active_day", "users_active_30d", "files_bytes", "media_jobs_waiting", "messenger_db_bytes"}, day, end); err != nil {
+		[]string{"media_jobs_waiting", "messenger_db_bytes"}); err != nil {
 		return err
 	}
 	if c.Moderation != nil {
@@ -179,12 +172,14 @@ func (c *Collector) snapshot(ctx context.Context, r Row, day, end time.Time) err
 		}
 		r.Set("moderation_db_bytes", n)
 	}
-	if c.Storage != nil {
-		n, err := c.Storage.StorageBytes(ctx)
+	if c.Usage != nil {
+		u, err := c.Usage.Usage(ctx, day)
 		if err != nil {
-			return fmt.Errorf("storage_bytes: %w", err)
+			return err
 		}
-		r.Set("storage_bytes", n)
+		r.Set("users_active_day", u.ActiveDay)
+		r.Set("users_active_30d", u.Active30d)
+		r.Set("storage_bytes", u.StorageBytes)
 	}
 	return nil
 }

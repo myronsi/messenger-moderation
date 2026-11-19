@@ -38,7 +38,6 @@ var Metrics = []Metric{
 	{Name: "groups_new", Kind: Flow},
 	{Name: "calls", Kind: Flow},
 	{Name: "call_minutes", Kind: Flow},
-	{Name: "files_bytes", Kind: Level, Snapshot: true},
 	{Name: "storage_bytes", Kind: Level, Snapshot: true},
 	{Name: "messenger_db_bytes", Kind: Level, Snapshot: true},
 	{Name: "moderation_db_bytes", Kind: Level, Snapshot: true},

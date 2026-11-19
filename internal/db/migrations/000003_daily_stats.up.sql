@@ -16,7 +16,6 @@ CREATE TABLE daily_stats (
     groups_new              BIGINT,
     calls                   BIGINT,
     call_minutes            BIGINT,
-    files_bytes             BIGINT,
     storage_bytes           BIGINT,
     messenger_db_bytes      BIGINT,
     moderation_db_bytes     BIGINT,

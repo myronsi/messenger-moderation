@@ -85,7 +85,7 @@ export const USAGE_CHARTS: ChartDef[] = [
     series: [{ key: 'direct_chats_new', label: 'Direct chats' }, { key: 'groups_new', label: 'Groups' }],
   },
   { id: 'call-minutes', title: 'Call minutes', description: 'Length of the calls that started in the period.', kind: 'bar', format: 'minutes', series: [{ key: 'call_minutes', label: 'Call minutes' }] },
-  { id: 'files', title: 'Stored files', description: 'Size of all uploaded files at the end of the period.', kind: 'line', format: 'bytes', series: [{ key: 'files_bytes', label: 'Stored files' }] },
+  { id: 'storage', title: 'Stored files', description: 'Space used by uploaded files and their converted versions, at the end of the period.', kind: 'line', format: 'bytes', series: [{ key: 'storage_bytes', label: 'Stored files' }] },
 ];
 
 export const MODERATION_CHARTS: ChartDef[] = [

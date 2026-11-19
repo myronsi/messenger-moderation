@@ -135,7 +135,7 @@ func serve(cfg config.Config, log *slog.Logger) error {
 		log.Warn("MESSENGER_READ_DATABASE_URL is not set: no daily statistics")
 	}
 	statsStore := stats.NewStore(pool)
-	collector := newCollector(messengerDB, statsStore)
+	collector := newCollector(cfg, messengerDB, statsStore)
 	statsHandlers := &stats.Handlers{Store: statsStore, Collector: collector, Log: log}
 	handler := httpserver.New(httpserver.Deps{
 		Staff: staffSvc, PublicOrigin: cfg.PublicOrigin, TrustProxy: cfg.TrustProxy, Environment: cfg.Environment, Version: version,
@@ -210,11 +210,15 @@ func openMessenger(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error
 	return pool, nil
 }
 
-func newCollector(messengerDB *pgxpool.Pool, store *stats.Store) *stats.Collector {
+func newCollector(cfg config.Config, messengerDB *pgxpool.Pool, store *stats.Store) *stats.Collector {
 	if messengerDB == nil {
 		return nil
 	}
-	return &stats.Collector{Messenger: messengerDB, Moderation: store}
+	c := &stats.Collector{Messenger: messengerDB, Moderation: store}
+	if cfg.Messenger.InternalURL != "" {
+		c.Usage = stats.NewUsageClient(cfg.Messenger.InternalURL, cfg.Messenger.InternalToken)
+	}
+	return c
 }
 
 func statsRerun(cfg config.Config, log *slog.Logger, args []string, stdout io.Writer) error {
@@ -255,7 +259,7 @@ func statsRerun(cfg config.Config, log *slog.Logger, args []string, stdout io.Wr
 	}
 	defer messengerDB.Close()
 	store := stats.NewStore(pool)
-	job := &stats.Job{Collector: newCollector(messengerDB, store), Store: store, Log: log}
+	job := &stats.Job{Collector: newCollector(cfg, messengerDB, store), Store: store, Log: log}
 	n, err := job.Rerun(ctx, from, to)
 	if err != nil {
 		return err

@@ -18,10 +18,8 @@ import (
 
 const messengerSchema = `
 CREATE TABLE users (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL);
-CREATE TABLE user_sessions (user_id BIGINT NOT NULL, last_active_at TIMESTAMPTZ NOT NULL);
 CREATE TABLE chats (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, type TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL);
 CREATE TABLE calls (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, started_at TIMESTAMPTZ, ended_at TIMESTAMPTZ);
-CREATE TABLE attachments (size BIGINT NOT NULL);
 CREATE TABLE media_jobs (state TEXT NOT NULL);
 CREATE TABLE user_reports (reason TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL);
 CREATE TABLE sticker_pack_reports (reason TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL);
@@ -89,16 +87,20 @@ func at(h, m int) time.Time {
 
 func seed(t *testing.T, db *pgxpool.Pool) {
 	exec(t, db, `INSERT INTO users (created_at) VALUES ($1), ($2), ($3), ($4), ($5)`, at(-48, 0), at(-30, 0), at(9, 0), at(23, 59), at(24, 1))
-	exec(t, db, `INSERT INTO user_sessions (user_id, last_active_at) VALUES (1, $1), (1, $2), (2, $3), (3, $4), (4, $5)`,
-		at(10, 0), at(24, 2), at(-1, 0), at(-24*20, 0), at(-24*40, 0))
 	exec(t, db, `INSERT INTO chats (type, created_at) VALUES ('direct', $1), ('direct', $2), ('group', $3), ('group', $4), ('group', $5)`,
 		at(-30, 0), at(12, 0), at(-30, 0), at(13, 0), at(24, 30))
 	exec(t, db, `INSERT INTO calls (started_at, ended_at) VALUES ($1, $2), ($3, $4), ($5, NULL), ($6, NULL)`,
 		at(10, 0), at(10, 5), at(23, 50), at(24, 20), at(23, 59), at(-2, 0))
-	exec(t, db, `INSERT INTO attachments (size) VALUES (1000), (2500)`)
 	exec(t, db, `INSERT INTO media_jobs (state) VALUES ('queued'), ('running'), ('done'), ('failed')`)
 	exec(t, db, `INSERT INTO user_reports (reason, created_at) VALUES ('spam', $1), ('spam', $1), ('scam', $2), ('spam', $3)`, at(1, 0), at(20, 0), at(24, 0))
 	exec(t, db, `INSERT INTO sticker_pack_reports (reason, created_at) VALUES ('hate', $1)`, at(5, 0))
+}
+
+type usageStub struct{ days []time.Time }
+
+func (u *usageStub) Usage(_ context.Context, day time.Time) (stats.Usage, error) {
+	u.days = append(u.days, day)
+	return stats.Usage{ActiveDay: 7, Active30d: 30, StorageBytes: 9000}, nil
 }
 
 func want(t *testing.T, r stats.Row, expected map[string]any) {
@@ -123,7 +125,8 @@ func TestCollectRightAfterMidnight(t *testing.T) {
 	seed(t, m)
 	exec(t, m, `INSERT INTO message_day_counts VALUES ($1::date, 'text', 40, 0), ($1::date, 'file', 5, 9), ($1::date, 'voice', 3, 3), ('2026-11-19', 'text', 99, 0)`, "2026-11-18")
 	pool, _ := testdb.New(t)
-	c := &stats.Collector{Messenger: m, Moderation: stats.NewStore(pool), Now: func() time.Time { return at(24, 5) }}
+	usage := &usageStub{}
+	c := &stats.Collector{Messenger: m, Moderation: stats.NewStore(pool), Usage: usage, Now: func() time.Time { return at(24, 5) }}
 	r, err := c.Collect(context.Background(), day)
 	if err != nil {
 		t.Fatal(err)
@@ -132,13 +135,16 @@ func TestCollectRightAfterMidnight(t *testing.T) {
 		t.Fatal("a day computed 5 minutes after it ended is not late")
 	}
 	want(t, r, map[string]any{
-		"users_total": 4, "users_new": 2, "users_active_day": 1, "users_active_30d": 3,
+		"users_total": 4, "users_new": 2, "users_active_day": 7, "users_active_30d": 30,
 		"messages": 48, "messages_text": 40, "messages_file": 5, "messages_voice": 3, "messages_sticker": 0, "files_sent": 9,
 		"direct_chats_total": 2, "direct_chats_new": 1, "groups_total": 2, "groups_new": 1,
 		"calls": 3, "call_minutes": 36,
-		"files_bytes": 3500, "media_jobs_waiting": 2, "storage_bytes": nil,
+		"storage_bytes": 9000, "media_jobs_waiting": 2,
 		"reports_total": 3, "pack_reports_total": 1, "decisions_total": nil, "median_decision_seconds": nil, "reversals": nil,
 	})
+	if len(usage.days) != 1 || !usage.days[0].Equal(day) {
+		t.Errorf("usage asked for %v", usage.days)
+	}
 	if v, ok := r.Get("messenger_db_bytes"); !ok || v <= 0 {
 		t.Errorf("messenger_db_bytes = %d", v)
 	}
@@ -156,7 +162,8 @@ func TestCollectRightAfterMidnight(t *testing.T) {
 func TestCollectLateLeavesPointInTimeNumbersEmpty(t *testing.T) {
 	m := messengerDB(t, false)
 	seed(t, m)
-	c := &stats.Collector{Messenger: m, Now: func() time.Time { return at(24*3, 0) }}
+	usage := &usageStub{}
+	c := &stats.Collector{Messenger: m, Usage: usage, Now: func() time.Time { return at(24*3, 0) }}
 	r, err := c.Collect(context.Background(), day)
 	if err != nil {
 		t.Fatal(err)
@@ -166,9 +173,12 @@ func TestCollectLateLeavesPointInTimeNumbersEmpty(t *testing.T) {
 	}
 	want(t, r, map[string]any{
 		"users_total": 4, "users_new": 2, "groups_new": 1, "reports_total": 3,
-		"users_active_day": nil, "users_active_30d": nil, "files_bytes": nil, "media_jobs_waiting": nil, "messenger_db_bytes": nil,
+		"users_active_day": nil, "users_active_30d": nil, "storage_bytes": nil, "media_jobs_waiting": nil, "messenger_db_bytes": nil,
 		"messages": nil, "files_sent": nil,
 	})
+	if len(usage.days) != 0 {
+		t.Errorf("a late day does not ask for usage figures: %v", usage.days)
+	}
 }
 
 func TestCollectTodaySoFar(t *testing.T) {
