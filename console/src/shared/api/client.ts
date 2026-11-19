@@ -75,3 +75,44 @@ export interface StatusOverview {
 }
 
 export const fetchStatus = () => api.get<StatusOverview>('/api/status');
+
+export type StatsGroup = 'day' | 'week' | 'month';
+
+export type StatsScope = 'all' | 'moderation';
+
+export type StatsBreakdown = Record<string, number>;
+
+export interface StatsRow {
+  day: string;
+  late: boolean;
+  [metric: string]: number | null | string | boolean | StatsBreakdown | undefined;
+}
+
+export interface StatsRange {
+  from: string;
+  to: string;
+  group: StatsGroup;
+  scope: StatsScope;
+  rows: StatsRow[];
+}
+
+export interface StatsToday {
+  scope: StatsScope;
+  as_of: string;
+  today: StatsRow;
+  yesterday: StatsRow | null;
+}
+
+export interface StatsQuery {
+  from: string;
+  to: string;
+  group: StatsGroup;
+}
+
+const statsParams = (q: StatsQuery) => new URLSearchParams({ from: q.from, to: q.to, group: q.group });
+
+export const fetchStats = (q: StatsQuery) => api.get<StatsRange>(`/api/stats?${statsParams(q)}`);
+
+export const fetchStatsToday = () => api.get<StatsToday>('/api/stats/today');
+
+export const statsCsvUrl = (q: StatsQuery) => `/api/stats?${statsParams(q)}&format=csv`;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ThemeProvider } from 'next-themes';
 import { Loader2 } from 'lucide-react';
@@ -13,7 +13,16 @@ import { StatusPage } from '@/pages/status';
 import { ApiError, fetchMe, fetchMeta, signOut, type Meta, type Staff } from '@/shared/api/client';
 import { Shell } from '@/widgets/shell';
 
-type SessionState = { status: 'loading' } | { status: 'signed-out' } | { status: 'signed-in'; staff: Staff };
+const StatisticsPage = lazy(() => import('@/pages/statistics').then((m) => ({ default: m.StatisticsPage })));
+
+const PageLoading = () => (
+  <div className="flex justify-center py-12 text-muted-foreground" role="status">
+    <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin" />
+    <span className="sr-only">Loading</span>
+  </div>
+);
+
+type SessionState ={ status: 'loading' } | { status: 'signed-out' } | { status: 'signed-in'; staff: Staff };
 
 const App = () => {
   const [session, setSession] = useState<SessionState>({ status: 'loading' });
@@ -60,7 +69,7 @@ const App = () => {
             <Route path="/content-reports/:id" element={<ContentReportRoute />} />
             <Route path="/packs" element={<PacksRoute />} />
             <Route path="/packs/:kind/:id" element={<PackRoute />} />
-            <Route path="/statistics" element={<PlaceholderPage title="Statistics" description="Daily numbers and charts." />} />
+            <Route path="/statistics" element={<Suspense fallback={<PageLoading />}><StatisticsPage /></Suspense>} />
             <Route path="/staff" element={<PlaceholderPage title="Staff" description="Staff accounts and roles." />} />
             <Route path="*" element={<PlaceholderPage title="Not found" description="This page does not exist." />} />
           </Routes>

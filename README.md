@@ -8,7 +8,7 @@ planning folder), section 0 "Architecture v2".
 
 | Path | What |
 |---|---|
-| `cmd/moderation` | The program: `serve` (default), `migrate`, `create-staff` |
+| `cmd/moderation` | The program: `serve` (default), `migrate`, `create-staff`, `stats-rerun` |
 | `internal/config` | Environment configuration, validated on start |
 | `internal/db` | PostgreSQL pool and embedded migrations (`internal/db/migrations`) for the `moderation` database |
 | `internal/staff` | Staff accounts: Argon2id passwords, required TOTP, 12-hour sessions, roles `admin` and `moderator`, sign-in rate limit |
@@ -22,6 +22,8 @@ planning folder), section 0 "Architecture v2".
 | `internal/cases` | Cases with a 72-hour deadline, opened by a watcher every minute for automatic restricted or suspended levels, packs hidden after reports (last 30 days) and users' requests for a review by a person |
 | `internal/notices` | Notices of illegal content that arrived by email: entered by staff as cases, decided with an outcome, and the decision emailed to the notifier when they gave an address |
 | `internal/status` | Status checks every minute, incidents after 3 failures, monitoring gaps, email alerts, `/status.json` (public) and `/api/status` (admins), daily uptime |
+| `internal/stats` | Daily statistics: job, `GET /api/stats` (with CSV) and `GET /api/stats/today` ([docs/statistics.md](docs/statistics.md)) |
+| `internal/retention` | Daily deletion of data past its retention period |
 | `internal/testdb` | Test helper: a fresh schema per test in the test PostgreSQL |
 | `console/` | The console UI; its build output in `console/dist` is embedded into the program |
 
@@ -38,7 +40,7 @@ planning folder), section 0 "Architecture v2".
 | `TRUST_PROXY` | `false` | Use `X-Forwarded-For` for the client address (set behind nginx) |
 | `CONSOLE_DIR` | empty | Serve the console from a folder instead of the embedded build (development) |
 | `MESSENGER_INTERNAL_URL`, `MESSENGER_INTERNAL_TOKEN` | empty | messenger-back's internal API (`docs/internal-api.md` there) |
-| `MESSENGER_READ_DATABASE_URL` | empty | Read-only user on the Messenger database; without it the queue, account pages and search answer `503` |
+| `MESSENGER_READ_DATABASE_URL` | empty | Read-only user on the Messenger database; without it the queue, account pages and search answer `503`, and no daily statistics are written |
 | `ENVIRONMENT_NAME` | `development` | `development`, `staging` or `production`; shown as a coloured badge in the console |
 | `MESSENGER_API_READY_URL` | empty | The API readiness address, for example `http://api:8080/readyz`; checks the API and every store behind it |
 | `MESSENGER_WORKER_HEALTH_URL` | empty | The worker health address, for example `http://worker:8081/healthz` |
@@ -96,6 +98,7 @@ from the account page first, then record the notice's outcome.
 go run ./cmd/moderation migrate
 go run ./cmd/moderation create-staff -role admin <username>
 go run ./cmd/moderation create-staff -role moderator -confidentiality-signed 2026-11-19 <username>
+go run ./cmd/moderation stats-rerun -from 2026-11-18 -to 2026-11-18
 go run ./cmd/moderation
 ```
 
