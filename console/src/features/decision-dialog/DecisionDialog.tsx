@@ -11,6 +11,7 @@ export interface DecisionDialogProps {
   submitLabel: string;
   destructive?: boolean;
   confirmWord?: string;
+  textLabel?: string;
   children?: ReactNode;
   onSubmit: (reason: Reason) => Promise<unknown>;
   onDone: () => void;
@@ -22,7 +23,18 @@ const RULE_OPTIONS = [
   ...DECISION_RULES.map((rule) => ({ value: rule, label: RULE_LABELS[rule] })),
 ];
 
-export function DecisionDialog({ title, description, submitLabel, destructive, confirmWord, children, onSubmit, onDone, onCancel }: DecisionDialogProps) {
+export function DecisionDialog({
+  title,
+  description,
+  submitLabel,
+  destructive,
+  confirmWord,
+  textLabel = 'Text for the user (shown as written by Messenger moderation)',
+  children,
+  onSubmit,
+  onDone,
+  onCancel,
+}: DecisionDialogProps) {
   const titleId = useId();
   const textId = useId();
   const confirmId = useId();
@@ -72,7 +84,7 @@ export function DecisionDialog({ title, description, submitLabel, destructive, c
           <Select label="Rule from the guidelines" value={rule} options={RULE_OPTIONS} onValueChange={setRule} required />
           <div className="flex flex-col gap-1">
             <label htmlFor={textId} className="text-xs font-medium text-muted-foreground">
-              Text for the user (shown as written by Messenger moderation)
+              {textLabel}
             </label>
             <textarea
               id={textId}
