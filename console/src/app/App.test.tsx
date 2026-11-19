@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { account } from '@/test/moderationFixtures';
 import App from './App';
 
 const json = (status: number, body: unknown) =>
@@ -67,11 +68,30 @@ describe('App', () => {
     mockServer({
       'GET /api/me': () => json(200, { staff: { id: 2, username: 'helper', role: 'moderator' } }),
       'GET /api/meta': () => json(200, { environment: 'staging', version: '1' }),
+      'GET /api/queue': () => json(200, { items: [], next_cursor: null }),
     });
     renderApp();
-    expect(await screen.findByRole('heading', { name: 'Queue' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Review queue' })).toBeInTheDocument();
     expect(screen.queryAllByRole('link', { name: 'Status' })).toHaveLength(0);
     expect(screen.queryAllByRole('link', { name: 'Staff' })).toHaveLength(0);
+  });
+
+  it('opens an account from the search box', async () => {
+    mockServer({
+      'GET /api/me': () => json(200, { staff: { id: 2, username: 'helper', role: 'moderator' } }),
+      'GET /api/meta': () => json(200, { environment: 'staging', version: '1' }),
+      'GET /api/queue': () => json(200, { items: [], next_cursor: null }),
+      'GET /api/users?q=dave': () => json(200, { users: [{ id: '4', username: 'dave', display_name: 'Dave', created_at: '2026-10-01T08:00:00Z', status: 'warned' }] }),
+      'GET /api/users/4': () => json(200, account()),
+    });
+    const user = userEvent.setup();
+    renderApp('/queue');
+    const [search] = await screen.findAllByRole('searchbox', { name: 'Find an account' });
+    await user.type(search, 'dave');
+    await user.click(await screen.findByRole('link', { name: /@dave · ID 4/ }));
+    expect(await screen.findByRole('heading', { name: 'Dave' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to the queue' })).toHaveAttribute('href', '/queue');
+    expect(search).toHaveValue('');
   });
 
   it('signs out', async () => {
