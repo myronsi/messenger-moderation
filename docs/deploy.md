@@ -56,8 +56,8 @@ folder, and the folder name is its compose project:
 
 | Environment | Folder | `MODERATION_PORT` | `MESSENGER_NETWORK` |
 |---|---|---|---|
-| production | `/opt/messenger-moderation` | `8090` | `messenger-go_default` (stack in `/opt/messenger-go`) |
-| staging | `/opt/messenger-moderation-staging` | `8091` | `<COMPOSE_PROJECT_NAME of /opt/messenger-staging>_default` |
+| production | `/opt/messenger-moderation` | `8190` | `messenger-go_default` (stack in `/opt/messenger-go`) |
+| staging | `/opt/messenger-moderation-staging` | `8191` | `<COMPOSE_PROJECT_NAME of /opt/messenger-staging>_default` |
 
 ```sh
 sudo mkdir -p /opt/messenger-moderation /opt/messenger-moderation-staging
@@ -83,7 +83,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/messenger-static-sites/privkey.pem;
     client_max_body_size 1m;
     location / {
-        proxy_pass http://127.0.0.1:8091;
+        proxy_pass http://127.0.0.1:8191;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         proxy_set_header Host $host;
@@ -93,7 +93,7 @@ server {
 }
 ```
 
-and the same for `moderation.messenger.viserix.com` with port `8090`.
+and the same for `moderation.messenger.viserix.com` with port `8190`.
 
 ### 5. GitHub environments
 

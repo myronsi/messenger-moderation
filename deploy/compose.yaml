@@ -7,7 +7,7 @@ services:
       HTTP_ADDR: ":8090"
       TRUST_PROXY: "true"
     ports:
-      - "127.0.0.1:${MODERATION_PORT:-8090}:8090"
+      - "127.0.0.1:${MODERATION_PORT:-8190}:8090"
     networks:
       - messenger
     healthcheck:

@@ -12,7 +12,7 @@ import (
 	"github.com/myronsi/messenger-moderation/internal/testdb"
 )
 
-var testKey = []byte("0123456789abcdef0123456789abcdef")
+var testKey = []byte(strings.Repeat("k", 32))
 
 func newService(t *testing.T) (*Service, context.Context) {
 	t.Helper()

@@ -27,7 +27,7 @@ type fixture struct {
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 	pool, _ := testdb.New(t)
-	svc, err := staff.NewService(pool, []byte("0123456789abcdef0123456789abcdef"), 12*time.Hour)
+	svc, err := staff.NewService(pool, []byte(strings.Repeat("k", 32)), 12*time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 	"time"
@@ -9,7 +10,7 @@ import (
 func valid() map[string]string {
 	return map[string]string{
 		"DATABASE_URL":   "postgres://moderation:pw@localhost:5432/moderation",
-		"ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+		"ENCRYPTION_KEY": base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", 32))),
 	}
 }
 
