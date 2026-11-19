@@ -102,6 +102,22 @@ func (c *Client) SetPackHidden(ctx context.Context, kind string, packID int64, h
 	return out.Changed, err
 }
 
+type Removal struct {
+	ChatID         string  `json:"chat_id"`
+	MessageID      string  `json:"message_id"`
+	SenderID       *string `json:"sender_id"`
+	ReasonCode     string  `json:"reason_code"`
+	ReasonText     string  `json:"reason_text"`
+	AlreadyRemoved bool    `json:"already_removed"`
+}
+
+func (c *Client) RemoveMessage(ctx context.Context, chatID, messageID int64, reasonCode, reasonText string) (Removal, error) {
+	var out Removal
+	body := map[string]string{"reason_code": reasonCode, "reason_text": reasonText}
+	err := c.do(ctx, http.MethodPost, "/chats/"+id(chatID)+"/messages/"+id(messageID)+"/remove", body, &out)
+	return out, err
+}
+
 func (c *Client) DeleteAccount(ctx context.Context, userID int64) error {
 	return c.do(ctx, http.MethodDelete, "/users/"+id(userID), nil, nil)
 }
@@ -175,7 +191,7 @@ func failure(resp *http.Response) error {
 		return ErrNotFound
 	case http.StatusForbidden:
 		return ErrForbidden
-	case http.StatusBadRequest:
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
 		return &FieldError{Field: p.Field, Message: p.Message}
 	}
 	return fmt.Errorf("messenger answered %d %s", resp.StatusCode, p.Error)

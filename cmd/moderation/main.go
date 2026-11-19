@@ -22,6 +22,7 @@ import (
 	"github.com/myronsi/messenger-moderation/internal/appdb"
 	"github.com/myronsi/messenger-moderation/internal/cases"
 	"github.com/myronsi/messenger-moderation/internal/config"
+	"github.com/myronsi/messenger-moderation/internal/content"
 	"github.com/myronsi/messenger-moderation/internal/db"
 	"github.com/myronsi/messenger-moderation/internal/decisions"
 	"github.com/myronsi/messenger-moderation/internal/httpserver"
@@ -103,7 +104,9 @@ func serve(cfg config.Config, log *slog.Logger) error {
 		log.Warn("MESSENGER_READ_DATABASE_URL is not set; queue, account pages and search answer 503")
 	}
 	caseStore := cases.NewStore(pool, appPool, log)
-	decisionSvc := decisions.NewService(pool, appPool, messenger.New(cfg.Messenger.InternalURL, cfg.Messenger.InternalToken, nil), caseStore, log)
+	messengerClient := messenger.New(cfg.Messenger.InternalURL, cfg.Messenger.InternalToken, nil)
+	decisionSvc := decisions.NewService(pool, appPool, messengerClient, caseStore, log)
+	contentSvc := content.NewService(pool, appPool, messengerClient, log)
 	reviewSvc := review.NewService(reviewStore, pool, decisionSvc.Reviews)
 	if cfg.Messenger.InternalURL == "" {
 		log.Warn("MESSENGER_INTERNAL_URL is not set; decisions answer 503")
@@ -120,6 +123,7 @@ func serve(cfg config.Config, log *slog.Logger) error {
 			status.Register(mux, s, reporter, cfg.Status.PublicOrigins)
 			review.Register(mux, s, reviewSvc, log)
 			decisions.Register(mux, s, decisionSvc, log)
+			content.Register(mux, s, contentSvc, log)
 		},
 	})
 	go monitor.Run(ctx)

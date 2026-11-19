@@ -18,6 +18,7 @@ planning folder), section 0 "Architecture v2".
 | `internal/httpserver` | HTTP API under `/api`, security headers, same-origin check for changes, console files with SPA fallback; `RequireStaff` and `RequireAdmin` for new routes |
 | `internal/messenger` | Client for messenger-back's internal API (`/internal/v1`): set status, dismiss reports, hide or unhide packs, delete accounts, pack images |
 | `internal/decisions` | Staff actions with a guideline rule and a text for the user, each audited with before and after; cases list and confirm or reverse; pack pages |
+| `internal/content` | Reported messages and groups: list (one row per reported item), the report page with the copy taken at report time, remove a message through Messenger's internal API, close without action; every view and decision audited |
 | `internal/cases` | Cases with a 72-hour deadline, opened by a watcher every minute for automatic restricted or suspended levels and packs hidden after reports (last 30 days) |
 | `internal/status` | Status checks every minute, incidents after 3 failures, monitoring gaps, email alerts, `/status.json` (public) and `/api/status` (admins), daily uptime |
 | `internal/testdb` | Test helper: a fresh schema per test in the test PostgreSQL |
@@ -66,6 +67,10 @@ All routes need a staff session (cookie `mod_session`); moderators and admins ma
 | `GET /api/queue` | Accounts with reports newer than the last staff review, or a restricted or suspended status set after it; most urgent first (status level, newest report that counts, score). Query: `status` and `reason` (comma-separated), `opened_after`, `opened_before` (RFC 3339, when the account entered the queue), `limit` (1 to 100, default 50), `cursor` | `queue.viewed` with the listed user IDs |
 | `GET /api/users/{id}` | Profile, current status with probation and appeal block, status history, all reports with reporter, reason, note, context, weight and profile snapshot | `user.viewed`, target `user` |
 | `GET /api/users?q=` | Up to 20 accounts by username prefix, display name or ID (at least 2 characters or an ID; a leading `@` is ignored) | `users.searched` with the query and the user IDs |
+| `GET /api/content-reports?state=open\|decided` | Reported messages and groups, newest first, one row per reported item with the number of reports on it; withdrawn reports are left out | `content_reports.viewed` with the report IDs |
+| `GET /api/content-reports/{id}` | One report with the copy (the reported message and up to 5 visible messages before and after it, or the group's name, description and picture), the other reports on the same item and the decision | `content_report.viewed`, target `content_report` |
+| `POST /api/content-reports/{id}/remove` | `{reason_code, reason_text}`: removes the reported message in Messenger (`POST /internal/v1/chats/{chat}/messages/{message}/remove`); members see "Removed by moderation", the sender gets the rule and the text | `message.removed`, target `message` (`chat:message`) |
+| `POST /api/content-reports/{id}/dismiss` | `{note?}`: closes the item without action; nobody in Messenger is told | `content_report.dismissed`, target `content_report` |
 
 Staff decisions arrive with M2; until then no account counts as reviewed.
 
