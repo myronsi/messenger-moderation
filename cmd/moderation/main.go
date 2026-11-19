@@ -29,7 +29,9 @@ import (
 	"github.com/myronsi/messenger-moderation/internal/messenger"
 	"github.com/myronsi/messenger-moderation/internal/notices"
 	"github.com/myronsi/messenger-moderation/internal/review"
+	"github.com/myronsi/messenger-moderation/internal/retention"
 	"github.com/myronsi/messenger-moderation/internal/staff"
+	"github.com/myronsi/messenger-moderation/internal/stats"
 	"github.com/myronsi/messenger-moderation/internal/status"
 )
 
@@ -62,8 +64,10 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 		return db.Migrate(cfg.DatabaseURL)
 	case "create-staff":
 		return createStaff(cfg, args, stdin, stdout)
+	case "stats-rerun":
+		return statsRerun(cfg, log, args, stdout)
 	default:
-		return fmt.Errorf("unknown command %q: use serve, migrate or create-staff", command)
+		return fmt.Errorf("unknown command %q: use serve, migrate, create-staff or stats-rerun", command)
 	}
 }
 
@@ -121,6 +125,18 @@ func serve(cfg config.Config, log *slog.Logger) error {
 	monitor := status.NewMonitor(pool, status.Options{
 		Probes: statusProbes(cfg, pool.Ping), Notifier: alertNotifier(cfg), Log: log, Interval: cfg.Status.Interval,
 	})
+	messengerDB, err := openMessenger(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	if messengerDB != nil {
+		defer messengerDB.Close()
+	} else {
+		log.Warn("MESSENGER_READ_DATABASE_URL is not set: no daily statistics")
+	}
+	statsStore := stats.NewStore(pool)
+	collector := newCollector(messengerDB, statsStore)
+	statsHandlers := &stats.Handlers{Store: statsStore, Collector: collector, Log: log}
 	handler := httpserver.New(httpserver.Deps{
 		Staff: staffSvc, PublicOrigin: cfg.PublicOrigin, TrustProxy: cfg.TrustProxy, Environment: cfg.Environment, Version: version,
 		Console: consoleFS, Ready: pool.Ping, Log: log,
@@ -130,6 +146,7 @@ func serve(cfg config.Config, log *slog.Logger) error {
 			decisions.Register(mux, s, decisionSvc, log)
 			content.Register(mux, s, contentSvc, log)
 			notices.Register(mux, s, noticeSvc, log)
+			statsHandlers.Register(mux, s)
 		},
 	})
 	go monitor.Run(ctx)
@@ -144,6 +161,11 @@ func serve(cfg config.Config, log *slog.Logger) error {
 	}
 
 	go purgeSessions(ctx, log, staffSvc)
+	go retention.Run(ctx, pool, log, retention.RunEvery)
+	if collector != nil {
+		job := &stats.Job{Collector: collector, Store: statsStore, Log: log}
+		go job.Run(ctx, stats.RunEvery)
+	}
 	errs := make(chan error, 1)
 	go func() {
 		log.Info("moderation listening", "addr", cfg.Addr, "env", cfg.Env)
@@ -175,6 +197,71 @@ func purgeSessions(ctx context.Context, log *slog.Logger, svc *staff.Service) {
 			}
 		}
 	}
+}
+
+func openMessenger(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
+	if cfg.Messenger.ReadDatabaseURL == "" {
+		return nil, nil
+	}
+	pool, err := db.Open(ctx, cfg.Messenger.ReadDatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("messenger database: %w", err)
+	}
+	return pool, nil
+}
+
+func newCollector(messengerDB *pgxpool.Pool, store *stats.Store) *stats.Collector {
+	if messengerDB == nil {
+		return nil
+	}
+	return &stats.Collector{Messenger: messengerDB, Moderation: store}
+}
+
+func statsRerun(cfg config.Config, log *slog.Logger, args []string, stdout io.Writer) error {
+	flags := flag.NewFlagSet("stats-rerun", flag.ContinueOnError)
+	fromFlag := flags.String("from", "", "first day (YYYY-MM-DD)")
+	toFlag := flags.String("to", "", "last day (YYYY-MM-DD), default: the same as -from")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	from, err := time.Parse(time.DateOnly, *fromFlag)
+	if err != nil {
+		return errors.New("usage: stats-rerun -from YYYY-MM-DD [-to YYYY-MM-DD]")
+	}
+	to := from
+	if *toFlag != "" {
+		if to, err = time.Parse(time.DateOnly, *toFlag); err != nil {
+			return fmt.Errorf("to: %w", err)
+		}
+	}
+	if to.Before(from) || !to.Before(stats.StartOfDay(time.Now())) {
+		return errors.New("stats-rerun: -to must be on or after -from and before today")
+	}
+	ctx := context.Background()
+	if err := db.Migrate(cfg.DatabaseURL); err != nil {
+		return err
+	}
+	pool, err := db.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	messengerDB, err := openMessenger(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	if messengerDB == nil {
+		return errors.New("stats-rerun needs MESSENGER_READ_DATABASE_URL")
+	}
+	defer messengerDB.Close()
+	store := stats.NewStore(pool)
+	job := &stats.Job{Collector: newCollector(messengerDB, store), Store: store, Log: log}
+	n, err := job.Rerun(ctx, from, to)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(stdout, "Recomputed %d days (%s to %s).\n", n, from.Format(time.DateOnly), to.Format(time.DateOnly))
+	return err
 }
 
 func consoleFiles(dir string) (fs.FS, error) {
