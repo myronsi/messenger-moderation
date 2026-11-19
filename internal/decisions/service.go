@@ -53,6 +53,8 @@ type Reason struct {
 	Text string `json:"reason_text"`
 }
 
+func (r Reason) Clean() (Reason, error) { return r.clean() }
+
 func (r Reason) clean() (Reason, error) {
 	if !slices.Contains(ReasonCodes, r.Code) {
 		return r, fmt.Errorf("%w: choose a rule from the guidelines", ErrInvalid)
@@ -239,10 +241,33 @@ func (s *Service) ConfirmCase(ctx context.Context, st staff.Staff, caseID int64,
 	switch c.Kind {
 	case cases.KindAccountStatus:
 		_, err = s.SetStatus(ctx, st, *c.UserID, *c.ToStatus, r)
+	case cases.KindReviewRequest:
+		current, cerr := s.currentStatus(ctx, *c.UserID)
+		if cerr != nil {
+			return cerr
+		}
+		if current == "good" {
+			return fmt.Errorf("%w: the account is in good standing again; nothing to confirm", ErrInvalid)
+		}
+		_, err = s.SetStatus(ctx, st, *c.UserID, current, r)
+	case cases.KindNotice:
+		return fmt.Errorf("%w: decide a notice with its own outcome", ErrInvalid)
 	default:
 		_, err = s.SetPackHidden(ctx, st, *c.PackKind, *c.PackID, true, r)
 	}
 	return err
+}
+
+func (s *Service) currentStatus(ctx context.Context, userID int64) (string, error) {
+	if s.app == nil {
+		return "", ErrUnavailable
+	}
+	status := "good"
+	err := s.app.QueryRow(ctx, `SELECT status FROM user_moderation WHERE user_id = $1`, userID).Scan(&status)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+	return status, nil
 }
 
 func (s *Service) ReverseCase(ctx context.Context, st staff.Staff, caseID int64, status string, r Reason) error {
@@ -262,6 +287,17 @@ func (s *Service) ReverseCase(ctx context.Context, st staff.Staff, caseID int64,
 			return fmt.Errorf("%w: choose a status below %s", ErrInvalid, *c.ToStatus)
 		}
 		_, err = s.SetStatus(ctx, st, *c.UserID, status, r)
+	case cases.KindReviewRequest:
+		current, cerr := s.currentStatus(ctx, *c.UserID)
+		if cerr != nil {
+			return cerr
+		}
+		if !slices.Contains(Statuses, status) || cases.Level(status) >= cases.Level(current) {
+			return fmt.Errorf("%w: choose a status below %s", ErrInvalid, current)
+		}
+		_, err = s.SetStatus(ctx, st, *c.UserID, status, r)
+	case cases.KindNotice:
+		return fmt.Errorf("%w: decide a notice with its own outcome", ErrInvalid)
 	default:
 		_, err = s.SetPackHidden(ctx, st, *c.PackKind, *c.PackID, false, r)
 	}

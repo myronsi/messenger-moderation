@@ -29,11 +29,15 @@ type Subject struct {
 
 type CaseView struct {
 	cases.Case
-	Subject *Subject `json:"subject"`
+	Subject *Subject      `json:"subject"`
+	Notice  *cases.Notice `json:"notice,omitempty"`
 }
 
-func (s *Service) Cases(ctx context.Context, st staff.Staff, open bool) ([]CaseView, error) {
-	list, err := s.cases.List(ctx, open, CaseListLimit)
+func (s *Service) Cases(ctx context.Context, st staff.Staff, open bool, kind string) ([]CaseView, error) {
+	if kind != "" && !slices.Contains(cases.Kinds, kind) {
+		return nil, fmt.Errorf("%w: unknown case kind", ErrInvalid)
+	}
+	list, err := s.cases.List(ctx, open, kind, CaseListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -41,10 +45,23 @@ func (s *Service) Cases(ctx context.Context, st staff.Staff, open bool) ([]CaseV
 	if err != nil {
 		return nil, err
 	}
+	var noticeIDs []int64
+	for _, c := range list {
+		if c.Kind == cases.KindNotice {
+			noticeIDs = append(noticeIDs, c.ID)
+		}
+	}
+	notices, err := s.cases.Notices(ctx, noticeIDs)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]CaseView, len(list))
 	ids := make([]string, len(list))
 	for i, c := range list {
 		out[i] = CaseView{Case: c, Subject: subjects[subjectKey(c)]}
+		if n, ok := notices[c.ID]; ok {
+			out[i].Notice = &n
+		}
 		ids[i] = strconv.FormatInt(c.ID, 10)
 	}
 	state := "decided"
@@ -61,6 +78,9 @@ func subjectKey(c cases.Case) string {
 	if c.UserID != nil {
 		return "user:" + strconv.FormatInt(*c.UserID, 10)
 	}
+	if c.PackKind == nil || c.PackID == nil {
+		return ""
+	}
 	return *c.PackKind + ":" + strconv.FormatInt(*c.PackID, 10)
 }
 
@@ -74,6 +94,7 @@ func (s *Service) subjects(ctx context.Context, list []cases.Case) (map[string]*
 		switch {
 		case c.UserID != nil:
 			users = append(users, *c.UserID)
+		case c.PackKind == nil || c.PackID == nil:
 		case *c.PackKind == "sticker_pack":
 			stickers = append(stickers, *c.PackID)
 		default:

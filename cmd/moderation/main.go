@@ -27,6 +27,7 @@ import (
 	"github.com/myronsi/messenger-moderation/internal/decisions"
 	"github.com/myronsi/messenger-moderation/internal/httpserver"
 	"github.com/myronsi/messenger-moderation/internal/messenger"
+	"github.com/myronsi/messenger-moderation/internal/notices"
 	"github.com/myronsi/messenger-moderation/internal/review"
 	"github.com/myronsi/messenger-moderation/internal/staff"
 	"github.com/myronsi/messenger-moderation/internal/status"
@@ -108,6 +109,10 @@ func serve(cfg config.Config, log *slog.Logger) error {
 	decisionSvc := decisions.NewService(pool, appPool, messengerClient, caseStore, log)
 	contentSvc := content.NewService(pool, appPool, messengerClient, log)
 	reviewSvc := review.NewService(reviewStore, pool, decisionSvc.Reviews)
+	noticeSvc := notices.NewService(pool, appPool, noticeMailer(cfg), log)
+	if !noticeSvc.MailEnabled() {
+		log.Warn("SMTP_HOST or SMTP_FROM is not set; decisions on notices are not emailed to the notifier")
+	}
 	if cfg.Messenger.InternalURL == "" {
 		log.Warn("MESSENGER_INTERNAL_URL is not set; decisions answer 503")
 	}
@@ -124,9 +129,11 @@ func serve(cfg config.Config, log *slog.Logger) error {
 			review.Register(mux, s, reviewSvc, log)
 			decisions.Register(mux, s, decisionSvc, log)
 			content.Register(mux, s, contentSvc, log)
+			notices.Register(mux, s, noticeSvc, log)
 		},
 	})
 	go monitor.Run(ctx)
+	go noticeSvc.RunMail(ctx, time.Minute)
 	if appPool != nil {
 		go caseStore.Run(ctx, time.Minute)
 	}
@@ -253,4 +260,11 @@ func healthcheck() error {
 		return fmt.Errorf("healthz answered %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func noticeMailer(cfg config.Config) notices.Mailer {
+	if cfg.Mail.Host == "" || cfg.Mail.From == "" {
+		return nil
+	}
+	return notices.NewSMTP(cfg.Mail.Host, cfg.Mail.Port, cfg.Mail.Username, cfg.Mail.Password, cfg.Mail.From)
 }

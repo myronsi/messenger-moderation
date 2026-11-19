@@ -17,39 +17,45 @@ const (
 
 	KindAccountStatus = "account_status"
 	KindPackHidden    = "pack_hidden"
+	KindReviewRequest = "review_request"
+	KindNotice        = "notice"
 
 	StateOpen       = "open"
 	StateConfirmed  = "confirmed"
 	StateReversed   = "reversed"
 	StateSuperseded = "superseded"
 
-	MaxAge      = 30 * 24 * time.Hour
-	watchEvents = "status_events"
-	eventBatch  = 500
-	eventLag    = 200
+	MaxAge        = 30 * 24 * time.Hour
+	watchEvents   = "status_events"
+	watchRequests = "review_requests"
+	eventBatch    = 500
+	eventLag      = 200
 )
 
 var ErrNotFound = errors.New("case not found")
+
+var Kinds = []string{KindAccountStatus, KindPackHidden, KindReviewRequest, KindNotice}
 
 var levels = map[string]int{"good": 0, "warned": 1, "limited": 2, "restricted": 3, "suspended": 4}
 
 func Level(status string) int { return levels[status] }
 
 type Case struct {
-	ID         int64      `json:"id,string"`
-	Kind       string     `json:"kind"`
-	UserID     *int64     `json:"user_id,string,omitempty"`
-	PackKind   *string    `json:"pack_kind,omitempty"`
-	PackID     *int64     `json:"pack_id,string,omitempty"`
-	FromStatus *string    `json:"from_status,omitempty"`
-	ToStatus   *string    `json:"to_status,omitempty"`
-	OpenedAt   time.Time  `json:"opened_at"`
-	Deadline   time.Time  `json:"deadline"`
-	State      string     `json:"state"`
-	DecidedAt  *time.Time `json:"decided_at"`
-	DecidedBy  *string    `json:"decided_by"`
-	ReasonCode *string    `json:"reason_code"`
-	ReasonText *string    `json:"reason_text"`
+	ID          int64      `json:"id,string"`
+	Kind        string     `json:"kind"`
+	UserID      *int64     `json:"user_id,string,omitempty"`
+	PackKind    *string    `json:"pack_kind,omitempty"`
+	PackID      *int64     `json:"pack_id,string,omitempty"`
+	FromStatus  *string    `json:"from_status,omitempty"`
+	ToStatus    *string    `json:"to_status,omitempty"`
+	OpenedAt    time.Time  `json:"opened_at"`
+	Deadline    time.Time  `json:"deadline"`
+	State       string     `json:"state"`
+	DecidedAt   *time.Time `json:"decided_at"`
+	DecidedBy   *string    `json:"decided_by"`
+	ReasonCode  *string    `json:"reason_code"`
+	ReasonText  *string    `json:"reason_text"`
+	RequestText *string    `json:"request_text,omitempty"`
 }
 
 type Store struct {
@@ -66,23 +72,23 @@ func NewStore(mod, app *pgxpool.Pool, log *slog.Logger) *Store {
 }
 
 const caseColumns = `c.id, c.kind, c.user_id, c.pack_kind, c.pack_id, c.from_status, c.to_status, c.opened_at, c.deadline,
-       c.state, c.decided_at, s.username, c.reason_code, c.reason_text`
+       c.state, c.decided_at, s.username, c.reason_code, c.reason_text, c.request_text`
 
 func scanCase(row pgx.CollectableRow) (Case, error) {
 	var c Case
 	err := row.Scan(&c.ID, &c.Kind, &c.UserID, &c.PackKind, &c.PackID, &c.FromStatus, &c.ToStatus, &c.OpenedAt, &c.Deadline,
-		&c.State, &c.DecidedAt, &c.DecidedBy, &c.ReasonCode, &c.ReasonText)
+		&c.State, &c.DecidedAt, &c.DecidedBy, &c.ReasonCode, &c.ReasonText, &c.RequestText)
 	return c, err
 }
 
-func (s *Store) List(ctx context.Context, open bool, limit int) ([]Case, error) {
+func (s *Store) List(ctx context.Context, open bool, kind string, limit int) ([]Case, error) {
 	query := `SELECT ` + caseColumns + ` FROM cases c LEFT JOIN staff_accounts s ON s.id = c.decided_by
-WHERE c.state = 'open' ORDER BY c.deadline, c.id LIMIT $1`
+WHERE c.state = 'open' AND ($2 = '' OR c.kind = $2) ORDER BY c.deadline, c.id LIMIT $1`
 	if !open {
 		query = `SELECT ` + caseColumns + ` FROM cases c LEFT JOIN staff_accounts s ON s.id = c.decided_by
-WHERE c.state <> 'open' ORDER BY c.decided_at DESC, c.id DESC LIMIT $1`
+WHERE c.state <> 'open' AND ($2 = '' OR c.kind = $2) ORDER BY c.decided_at DESC, c.id DESC LIMIT $1`
 	}
-	rows, err := s.mod.Query(ctx, query, limit)
+	rows, err := s.mod.Query(ctx, query, limit, kind)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +119,7 @@ func CloseUser(ctx context.Context, tx pgx.Tx, userID int64, newStatus string, d
     state = CASE WHEN $2 >= (CASE to_status WHEN 'suspended' THEN 4 WHEN 'restricted' THEN 3 WHEN 'limited' THEN 2 WHEN 'warned' THEN 1 ELSE 0 END)
                  THEN 'confirmed' ELSE 'reversed' END,
     decided_at = $3, decided_by = $4, reason_code = $5, reason_text = $6
-WHERE state = 'open' AND kind = 'account_status' AND user_id = $1
+WHERE state = 'open' AND kind IN ('account_status', 'review_request') AND user_id = $1
 RETURNING id`, userID, Level(newStatus), d.At, d.StaffID, d.ReasonCode, d.ReasonText)
 	if err != nil {
 		return nil, err
@@ -143,7 +149,11 @@ func (s *Store) Scan(ctx context.Context) (int, error) {
 	if err != nil {
 		return accounts + packs, fmt.Errorf("hidden packs: %w", err)
 	}
-	return accounts + packs, nil
+	requests, err := s.scanReviewRequests(ctx)
+	if err != nil {
+		return accounts + packs + requests, fmt.Errorf("review requests: %w", err)
+	}
+	return accounts + packs + requests, nil
 }
 
 type statusEvent struct {
@@ -294,7 +304,7 @@ WHERE c.kind = 'pack_hidden' AND c.pack_kind = $1 AND c.pack_id = $2 ORDER BY c.
 
 func (s *Store) ForUser(ctx context.Context, userID int64) ([]Case, error) {
 	rows, err := s.mod.Query(ctx, `SELECT `+caseColumns+` FROM cases c LEFT JOIN staff_accounts s ON s.id = c.decided_by
-WHERE c.kind = 'account_status' AND c.user_id = $1 ORDER BY c.opened_at DESC, c.id DESC LIMIT 50`, userID)
+WHERE c.user_id = $1 ORDER BY c.opened_at DESC, c.id DESC LIMIT 50`, userID)
 	if err != nil {
 		return nil, err
 	}

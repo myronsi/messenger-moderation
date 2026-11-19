@@ -19,6 +19,7 @@ import (
 	"github.com/myronsi/messenger-moderation/internal/decisions"
 	"github.com/myronsi/messenger-moderation/internal/httpserver"
 	"github.com/myronsi/messenger-moderation/internal/messenger"
+	"github.com/myronsi/messenger-moderation/internal/notices"
 	"github.com/myronsi/messenger-moderation/internal/staff"
 	"github.com/myronsi/messenger-moderation/internal/testdb"
 )
@@ -75,6 +76,8 @@ type env struct {
 	mod       *pgxpool.Pool
 	messenger *fakeMessenger
 	cases     *cases.Store
+	notices   *notices.Service
+	mailer    *fakeMailer
 	handler   http.Handler
 	moderator *http.Cookie
 	admin     *http.Cookie
@@ -88,13 +91,17 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := &env{t: t, app: app, mod: mod, messenger: &fakeMessenger{}, cases: cases.NewStore(mod, app.Read, nil)}
+	e := &env{t: t, app: app, mod: mod, messenger: &fakeMessenger{}, cases: cases.NewStore(mod, app.Read, nil), mailer: &fakeMailer{}}
 	e.moderator = e.login(svc, "helper", staff.RoleModerator)
 	e.admin = e.login(svc, "boss", staff.RoleAdmin)
 	decisionSvc := decisions.NewService(mod, app.Read, e.messenger, e.cases, nil)
+	e.notices = notices.NewService(mod, app.Read, e.mailer, nil)
 	e.handler = httpserver.New(httpserver.Deps{
 		Staff: svc, PublicOrigin: origin,
-		Register: func(mux *http.ServeMux, s *httpserver.Server) { decisions.Register(mux, s, decisionSvc, nil) },
+		Register: func(mux *http.ServeMux, s *httpserver.Server) {
+			decisions.Register(mux, s, decisionSvc, nil)
+			notices.Register(mux, s, e.notices, nil)
+		},
 	})
 	e.exec(`INSERT INTO users (id, username, display_name) VALUES (1, 'reporter', 'Reporter'), (2, 'spammer', 'Spammer'), (3, 'owner', 'Owner')`)
 	return e
