@@ -200,7 +200,9 @@ func (s *Service) SetPackHidden(ctx context.Context, st staff.Staff, kind string
 	err = s.recordOrLog(ctx, st, audit.Entry{
 		Action: action, TargetType: kind, TargetID: strconv.FormatInt(packID, 10),
 		Details: map[string]any{"changed": changed, "reason_code": r.Code, "reason_text": r.Text},
-	}, func(tx pgx.Tx, d cases.Decision) ([]int64, error) { return cases.ClosePack(ctx, tx, kind, packID, state, d) }, r)
+	}, func(tx pgx.Tx, d cases.Decision) ([]int64, error) {
+		return cases.ClosePack(ctx, tx, kind, packID, state, d)
+	}, r)
 	return changed, err
 }
 
@@ -218,7 +220,9 @@ func (s *Service) DeleteAccount(ctx context.Context, st staff.Staff, userID int6
 	return s.recordOrLog(ctx, st, audit.Entry{
 		Action: "user.deleted", TargetType: "user", TargetID: userTarget(userID),
 		Details: map[string]any{"reason_code": r.Code, "reason_text": r.Text},
-	}, func(tx pgx.Tx, d cases.Decision) ([]int64, error) { return cases.CloseUser(ctx, tx, userID, "suspended", d) }, r)
+	}, func(tx pgx.Tx, d cases.Decision) ([]int64, error) {
+		return cases.CloseUser(ctx, tx, userID, "suspended", d)
+	}, r)
 }
 
 func (s *Service) ConfirmCase(ctx context.Context, st staff.Staff, caseID int64, r Reason) error {

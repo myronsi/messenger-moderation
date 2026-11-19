@@ -84,7 +84,7 @@ func newEnv(t *testing.T) *env {
 	t.Helper()
 	mod, _ := testdb.New(t)
 	app := appdbtest.New(t)
-	svc, err := staff.NewService(mod, []byte("0123456789abcdef0123456789abcdef"), 12*time.Hour)
+	svc, err := staff.NewService(mod, []byte(strings.Repeat("k", 32)), 12*time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

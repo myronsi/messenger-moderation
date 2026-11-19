@@ -142,20 +142,20 @@ type PackReport struct {
 }
 
 type Pack struct {
-	Kind      string             `json:"kind"`
-	ID        int64              `json:"id,string"`
-	Title     string             `json:"title"`
-	Slug      *string            `json:"slug"`
+	Kind      string              `json:"kind"`
+	ID        int64               `json:"id,string"`
+	Title     string              `json:"title"`
+	Slug      *string             `json:"slug"`
 	Owner     *review.UserSummary `json:"owner"`
-	GroupPack bool               `json:"group_pack"`
-	Builtin   bool               `json:"builtin"`
-	HiddenAt  *time.Time         `json:"hidden_at"`
-	HiddenBy  *string            `json:"hidden_by"`
-	DeletedAt *time.Time         `json:"deleted_at"`
-	CreatedAt time.Time          `json:"created_at"`
-	Items     []PackItem         `json:"items"`
-	Reports   []PackReport       `json:"reports"`
-	Cases     []cases.Case       `json:"cases"`
+	GroupPack bool                `json:"group_pack"`
+	Builtin   bool                `json:"builtin"`
+	HiddenAt  *time.Time          `json:"hidden_at"`
+	HiddenBy  *string             `json:"hidden_by"`
+	DeletedAt *time.Time          `json:"deleted_at"`
+	CreatedAt time.Time           `json:"created_at"`
+	Items     []PackItem          `json:"items"`
+	Reports   []PackReport        `json:"reports"`
+	Cases     []cases.Case        `json:"cases"`
 }
 
 func (s *Service) Pack(ctx context.Context, st staff.Staff, kind string, packID int64) (Pack, error) {
