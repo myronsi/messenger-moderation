@@ -36,6 +36,7 @@ const request = async <T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
+  del: <T>(path: string, body?: unknown) => request<T>('DELETE', path, body ?? {}),
 };
 
 export const signIn = (username: string, password: string, code: string) =>

@@ -3,7 +3,9 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ThemeProvider } from 'next-themes';
 import { Loader2 } from 'lucide-react';
 import { AccountPage } from '@/pages/account';
+import { CasesRoute } from '@/pages/cases';
 import { LoginPage } from '@/pages/login';
+import { PackRoute, PacksRoute } from '@/pages/packs';
 import { PlaceholderPage } from '@/pages/placeholder';
 import { QueuePage } from '@/pages/queue';
 import { StatusPage } from '@/pages/status';
@@ -51,7 +53,10 @@ const App = () => {
             <Route path="/" element={<Navigate to={session.staff.role === 'admin' ? '/status' : '/queue'} replace />} />
             <Route path="/status" element={<StatusPage />} />
             <Route path="/queue" element={<QueuePage />} />
-            <Route path="/users/:id" element={<AccountPage />} />
+            <Route path="/users/:id" element={<AccountPage isAdmin={session.staff.role === 'admin'} />} />
+            <Route path="/cases" element={<CasesRoute />} />
+            <Route path="/packs" element={<PacksRoute />} />
+            <Route path="/packs/:kind/:id" element={<PackRoute />} />
             <Route path="/statistics" element={<PlaceholderPage title="Statistics" description="Daily numbers and charts." />} />
             <Route path="/staff" element={<PlaceholderPage title="Staff" description="Staff accounts and roles." />} />
             <Route path="*" element={<PlaceholderPage title="Not found" description="This page does not exist." />} />

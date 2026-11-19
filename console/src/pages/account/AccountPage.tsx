@@ -1,11 +1,13 @@
-import { Link } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { reasonLabel } from '@/entities/moderation';
 import { reviewApi, type AccountDetail, type ReviewApi } from '@/shared/api/review';
+import type { DecisionsApi } from '@/shared/api/decisions';
 import { ApiError } from '@/shared/api/client';
 import { Button } from '@/shared/ui/button';
 import { buildTimeline } from './model/timeline';
+import { AccountActions } from './ui/AccountActions';
 import { AccountHeader } from './ui/AccountHeader';
 import { AppealSummary } from './ui/AppealSummary';
 import { Timeline } from './ui/Timeline';
@@ -18,11 +20,14 @@ export interface AccountPageProps {
   accountHref: (id: string) => string;
   queueHref: string;
   now?: () => Date;
+  isAdmin?: boolean;
+  decisions?: Pick<DecisionsApi, 'setStatus' | 'dismissReports' | 'deleteAccount'>;
 }
 
-export default function AccountPage({ api = reviewApi, userId, accountHref, queueHref, now = () => new Date() }: AccountPageProps) {
+export default function AccountPage({ api = reviewApi, userId, accountHref, queueHref, now = () => new Date(), isAdmin = false, decisions }: AccountPageProps) {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let live = true;
@@ -64,14 +69,30 @@ export default function AccountPage({ api = reviewApi, userId, accountHref, queu
           </Button>
         </div>
       )}
-      {load.state === 'ready' && <AccountView detail={load.detail} accountHref={accountHref} now={now()} />}
+      {load.state === 'ready' && (
+        <AccountView
+          detail={load.detail}
+          accountHref={accountHref}
+          now={now()}
+          actions={
+            <AccountActions
+              detail={load.detail}
+              isAdmin={isAdmin}
+              api={decisions}
+              onChanged={() => setAttempt((n) => n + 1)}
+              onDeleted={() => navigate(queueHref)}
+            />
+          }
+        />
+      )}
     </div>
   );
 }
 
-function AccountView({ detail, accountHref, now }: { detail: AccountDetail; accountHref: (id: string) => string; now: Date }) {
+function AccountView({ detail, accountHref, now, actions }: { detail: AccountDetail; accountHref: (id: string) => string; now: Date; actions: ReactNode }) {
   const entries = useMemo(() => buildTimeline(detail), [detail]);
-  const active = detail.reports.filter((report) => report.withdrawn_at === null);
+  const active = detail.reports.filter((report) => report.withdrawn_at === null && !report.dismissed_at);
+  const dismissed = detail.reports.filter((report) => report.withdrawn_at === null && report.dismissed_at).length;
   const byReason = Object.entries(
     active.reduce<Record<string, number>>((counts, report) => ({ ...counts, [report.reason]: (counts[report.reason] ?? 0) + 1 }), {}),
   ).sort((a, b) => b[1] - a[1]);
@@ -87,12 +108,14 @@ function AccountView({ detail, accountHref, now }: { detail: AccountDetail; acco
           <Timeline entries={entries} current={detail.user} accountHref={accountHref} />
         </section>
         <aside className="flex flex-col gap-4">
+          {actions}
           <section aria-labelledby="reports-title" className="rounded-lg border bg-card p-4 text-sm">
             <h2 id="reports-title" className="mb-2 font-semibold">
               Reports
             </h2>
             <p>
-              {active.length} active, {detail.reports.length - active.length} withdrawn
+              {active.length} active, {detail.reports.length - active.length - dismissed} withdrawn
+              {dismissed > 0 && `, ${dismissed} dismissed`}
             </p>
             {byReason.length > 0 && (
               <ul className="mt-2 flex flex-col gap-0.5 text-muted-foreground">

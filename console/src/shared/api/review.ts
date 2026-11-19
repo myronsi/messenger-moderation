@@ -63,6 +63,7 @@ export interface UserReport {
   created_at: string;
   updated_at: string;
   withdrawn_at: string | null;
+  dismissed_at?: string | null;
 }
 
 export interface StatusChange {
@@ -71,6 +72,8 @@ export interface StatusChange {
   to_status: AccountStatus;
   score: number;
   cause: string;
+  reason_code?: string | null;
+  reason_text?: string | null;
   created_at: string;
 }
 
@@ -81,6 +84,9 @@ export interface CurrentStatus {
   probation_until: string | null;
   appeal_blocked_until: string | null;
   last_appeal_at: string | null;
+  decided_by?: 'automatic' | 'staff';
+  reason_code?: string | null;
+  reason_text?: string | null;
 }
 
 export interface AccountProfile extends UserSummary {
