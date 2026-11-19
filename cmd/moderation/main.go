@@ -87,6 +87,11 @@ func serve(cfg config.Config, log *slog.Logger) error {
 			return err
 		}
 		defer appPool.Close()
+		pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		if err := appPool.Ping(pingCtx); err != nil {
+			log.ErrorContext(ctx, "messenger database is not reachable; queue, account pages and search fail until it is", "error", err)
+		}
+		cancel()
 		reviewStore = review.NewStore(appPool)
 	} else {
 		log.Warn("MESSENGER_READ_DATABASE_URL is not set; queue, account pages and search answer 503")
