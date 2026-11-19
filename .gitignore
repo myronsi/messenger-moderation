@@ -1,0 +1,8 @@
+/moderation
+*.exe
+node_modules
+console/dist/*
+!console/dist/.gitkeep
+*.tsbuildinfo
+.env
+.env.test
