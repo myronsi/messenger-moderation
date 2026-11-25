@@ -65,6 +65,59 @@ describe('ContentReportPage', () => {
     expect(screen.getByTestId('decision-state')).toHaveTextContent('Open');
   });
 
+  it('shows polls, locations and contacts from their fields instead of the summary text', async () => {
+    const message = { sender_id: '2', sender_name: 'Spammer', files: [], sent_at: '2026-11-25T10:00:00Z', reported: false };
+    setup(async () => ({
+      ...detail,
+      copy: {
+        chat: { id: '70', type: 'group', title: 'Shop' },
+        messages: [
+          {
+            ...message, id: '900', type: 'poll', text: '📊 Best pills?', reported: true,
+            poll: {
+              question: 'Best pills?', options: [{ text: 'Red', votes: 1 }, { text: 'Blue', votes: 4 }],
+              multiple_answers: true, anonymous: false, quiz: false, closed: true,
+            },
+          },
+          {
+            ...message, id: '901', type: 'location', text: '📍 Pickup https://www.openstreetmap.org/?mlat=52.52&mlon=13.405#map=16/52.52/13.405',
+            location: { latitude: 52.52, longitude: 13.405, title: 'Pickup' },
+          },
+          { ...message, id: '902', type: 'contact', text: '👤 @dealer', contact: { user_id: '3', name: 'Pill Seller', username: 'dealer' } },
+          { ...message, id: '903', type: 'location', text: null, location: { latitude: -33.8, longitude: 151.2 } },
+          { ...message, id: '904', type: 'poll', text: '📊 Copy from an older version' },
+        ],
+      },
+    }));
+
+    const poll = within(await screen.findByTestId('reported-message')).getByRole('region', { name: 'Poll' });
+    expect(poll).toHaveTextContent('Best pills?');
+    expect(screen.queryByText('📊 Best pills?')).not.toBeInTheDocument();
+    const options = within(within(poll).getByRole('list', { name: 'Poll options' })).getAllByRole('listitem');
+    expect(options.map((o) => o.textContent)).toEqual(['Red1 vote', 'Blue4 votes']);
+    const tags = within(within(poll).getByRole('list', { name: 'Poll tags' })).getAllByRole('listitem');
+    expect(tags.map((t) => t.textContent)).toEqual(['Public', 'Multiple answers', 'Closed']);
+
+    const [named, unnamed] = screen.getAllByRole('region', { name: 'Location' });
+    expect(named).toHaveTextContent('Pickup');
+    expect(named).toHaveTextContent('52.52, 13.405');
+    expect(within(named).getByRole('link', { name: 'Open in OpenStreetMap' })).toHaveAttribute(
+      'href', 'https://www.openstreetmap.org/?mlat=52.52&mlon=13.405#map=16/52.52/13.405',
+    );
+    expect(within(named).getByRole('link', { name: 'Open in OpenStreetMap' })).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.queryByText(/📍 Pickup/)).not.toBeInTheDocument();
+    expect(unnamed).toHaveTextContent('Location without a name');
+    expect(unnamed).toHaveTextContent('-33.8, 151.2');
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+
+    const contact = screen.getByRole('region', { name: 'Contact' });
+    expect(contact).toHaveTextContent('Pill Seller');
+    expect(contact).toHaveTextContent('@dealer');
+    expect(within(contact).getByRole('link', { name: '3' })).toHaveAttribute('href', '/users/3');
+
+    expect(screen.getByText('📊 Copy from an older version')).toBeInTheDocument();
+  });
+
   it('removes the message with a rule and a text for the sender', async () => {
     const { api, user } = setup(async () => detail);
     await user.click(await screen.findByRole('button', { name: 'Remove message' }));

@@ -30,8 +30,8 @@ day.
 | `users_new` | Accounts created in the day | `users.created_at` | sum |
 | `users_active_day` | Accounts with a session used since the start of the day (point in time) | messenger-back `GET /internal/v1/stats/usage` (counts `user_sessions` there) | average per day |
 | `users_active_30d` | Accounts with a session used in the 30 days before the end of the day (point in time) | the same internal route | last day |
-| `messages` | Messages sent in the day: text, file, voice and sticker, forwards included | `message_day_counts` (messenger-back counts each stored message) | sum |
-| `messages_text`, `messages_file`, `messages_voice`, `messages_sticker` | The same by kind; `voice` includes video notes | `message_day_counts` | sum |
+| `messages` | Messages sent in the day: text, file, voice, sticker, poll, contact and location, forwards included | `message_day_counts` (messenger-back counts each stored message) | sum |
+| `messages_text`, `messages_file`, `messages_voice`, `messages_sticker`, `messages_poll`, `messages_contact`, `messages_location` | The same by kind; `voice` includes video notes. Poll, contact and location are empty for days stored before they were added | `message_day_counts` | sum |
 | `files_sent` | Files in file messages; an album counts every file | `message_day_counts.attachments` | sum |
 | `direct_chats_total`, `groups_total` | Chats of that kind created before the end of the day | `chats` | last day |
 | `direct_chats_new`, `groups_new` | Chats of that kind created in the day | `chats.created_at` | sum |

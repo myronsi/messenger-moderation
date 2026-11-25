@@ -78,6 +78,9 @@ export const USAGE_CHARTS: ChartDef[] = [
       { key: 'messages_file', label: 'Files' },
       { key: 'messages_voice', label: 'Voice' },
       { key: 'messages_sticker', label: 'Stickers' },
+      { key: 'messages_poll', label: 'Polls' },
+      { key: 'messages_contact', label: 'Contacts' },
+      { key: 'messages_location', label: 'Locations' },
     ],
   },
   {
