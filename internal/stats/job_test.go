@@ -14,6 +14,7 @@ import (
 func TestJobWritesEachDayOnceAndRerunOverwrites(t *testing.T) {
 	m := messengerDB(t, true)
 	seed(t, m)
+	exec(t, m, `INSERT INTO message_day_counts VALUES ('2026-11-18', 'poll', 3, 0), ('2026-11-18', 'contact', 2, 0), ('2026-11-18', 'location', 1, 0)`)
 	pool, _ := testdb.New(t)
 	store := stats.NewStore(pool)
 	now := at(24, 5)
@@ -32,7 +33,8 @@ func TestJobWritesEachDayOnceAndRerunOverwrites(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("rows %v %v", rows, err)
 	}
-	want(t, rows[0], map[string]any{"users_new": 2, "users_active_day": 7, "reports_total": 3})
+	want(t, rows[0], map[string]any{"users_new": 2, "users_active_day": 7, "reports_total": 3,
+		"messages": 6, "messages_poll": 3, "messages_contact": 2, "messages_location": 1, "messages_sticker": 0})
 	if rows[0].Breakdown["reports"]["spam"] != 2 {
 		t.Fatalf("stored breakdown %v", rows[0].Breakdown)
 	}

@@ -82,14 +82,40 @@ type copyShape struct {
 	Chat struct {
 		Title *string `json:"title"`
 	} `json:"chat"`
-	Messages []struct {
-		Text     *string  `json:"text"`
-		Files    []string `json:"files"`
-		Reported bool     `json:"reported"`
-	} `json:"messages"`
-	Group *struct {
+	Messages []copiedMessage `json:"messages"`
+	Group    *struct {
 		Title string `json:"title"`
 	} `json:"group"`
+}
+
+type copiedMessage struct {
+	Text     *string  `json:"text"`
+	Files    []string `json:"files"`
+	Reported bool     `json:"reported"`
+	Poll     *struct {
+		Question string `json:"question"`
+	} `json:"poll"`
+	Location *struct {
+		Title string `json:"title"`
+	} `json:"location"`
+	Contact *struct {
+		Name string `json:"name"`
+	} `json:"contact"`
+}
+
+func (m copiedMessage) summary() string {
+	switch {
+	case m.Poll != nil && strings.TrimSpace(m.Poll.Question) != "":
+		return "📊 " + m.Poll.Question
+	case m.Location != nil && strings.TrimSpace(m.Location.Title) != "":
+		return "📍 " + m.Location.Title
+	case m.Contact != nil && strings.TrimSpace(m.Contact.Name) != "":
+		return "👤 " + m.Contact.Name
+	}
+	if m.Text != nil && *m.Text != "" {
+		return *m.Text
+	}
+	return strings.Join(m.Files, ", ")
 }
 
 func excerpt(raw []byte) (string, *string) {
@@ -104,13 +130,7 @@ func excerpt(raw []byte) (string, *string) {
 		if !m.Reported {
 			continue
 		}
-		text := ""
-		if m.Text != nil {
-			text = *m.Text
-		}
-		if text == "" && len(m.Files) > 0 {
-			text = strings.Join(m.Files, ", ")
-		}
+		text := m.summary()
 		runes := []rune(text)
 		if len(runes) > 140 {
 			text = string(runes[:140]) + "…"

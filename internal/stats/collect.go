@@ -82,7 +82,7 @@ func (c *Collector) messages(ctx context.Context, r Row, day, _ time.Time) error
 	}
 	defer rows.Close()
 	var total, files int64
-	byType := map[string]int64{"text": 0, "file": 0, "voice": 0, "sticker": 0}
+	byType := map[string]int64{"text": 0, "file": 0, "voice": 0, "sticker": 0, "poll": 0, "contact": 0, "location": 0}
 	for rows.Next() {
 		var typ string
 		var n, a int64

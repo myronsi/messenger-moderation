@@ -125,7 +125,8 @@ func want(t *testing.T, r stats.Row, expected map[string]any) {
 func TestCollectRightAfterMidnight(t *testing.T) {
 	m := messengerDB(t, true)
 	seed(t, m)
-	exec(t, m, `INSERT INTO message_day_counts VALUES ($1::date, 'text', 40, 0), ($1::date, 'file', 5, 9), ($1::date, 'voice', 3, 3), ('2026-11-19', 'text', 99, 0)`, "2026-11-18")
+	exec(t, m, `INSERT INTO message_day_counts VALUES ($1::date, 'text', 40, 0), ($1::date, 'file', 5, 9), ($1::date, 'voice', 3, 3),
+		($1::date, 'poll', 4, 0), ($1::date, 'location', 2, 0), ('2026-11-19', 'text', 99, 0), ('2026-11-19', 'contact', 7, 0)`, "2026-11-18")
 	pool, _ := testdb.New(t)
 	usage := &usageStub{}
 	c := &stats.Collector{Messenger: m, Moderation: stats.NewStore(pool), Usage: usage, Now: func() time.Time { return at(24, 5) }}
@@ -138,7 +139,8 @@ func TestCollectRightAfterMidnight(t *testing.T) {
 	}
 	want(t, r, map[string]any{
 		"users_total": 4, "users_new": 2, "users_active_day": 7, "users_active_30d": 30,
-		"messages": 48, "messages_text": 40, "messages_file": 5, "messages_voice": 3, "messages_sticker": 0, "files_sent": 9,
+		"messages": 54, "messages_text": 40, "messages_file": 5, "messages_voice": 3, "messages_sticker": 0, "files_sent": 9,
+		"messages_poll": 4, "messages_contact": 0, "messages_location": 2,
 		"direct_chats_total": 2, "direct_chats_new": 1, "groups_total": 2, "groups_new": 1,
 		"calls": 3, "call_minutes": 36,
 		"storage_bytes": 9000, "media_jobs_waiting": 2,

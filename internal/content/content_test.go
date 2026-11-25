@@ -3,6 +3,7 @@ package content_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -196,6 +197,39 @@ func TestListShowsOneRowPerReportedItem(t *testing.T) {
 	}
 	if got := e.audit("content_reports.viewed"); len(got) != 2 {
 		t.Fatalf("data access log: %v", got)
+	}
+}
+
+func TestListExcerptsForPollsContactsAndLocations(t *testing.T) {
+	e := newEnv(t)
+	cases := []struct {
+		id      int64
+		fields  string
+		excerpt string
+	}{
+		{20, `"type":"poll","text":"📊 Best pills?","poll":{"question":"Best pills?","options":[{"text":"Red","votes":3},{"text":"Blue","votes":0}],
+			"multiple_answers":false,"anonymous":true,"quiz":false,"closed":false}`, "📊 Best pills?"},
+		{21, `"type":"location","text":"📍 Pickup https://www.openstreetmap.org/?mlat=52.52&mlon=13.405#map=16/52.52/13.405",
+			"location":{"latitude":52.52,"longitude":13.405,"title":"Pickup"}`, "📍 Pickup"},
+		{22, `"type":"location","text":"📍 https://www.openstreetmap.org/?mlat=1.5&mlon=2.5#map=16/1.5/2.5","location":{"latitude":1.5,"longitude":2.5}`,
+			"📍 https://www.openstreetmap.org/?mlat=1.5&mlon=2.5#map=16/1.5/2.5"},
+		{23, `"type":"contact","text":"👤 @dealer","contact":{"user_id":"3","name":"Drug Dealer","username":"dealer"}`, "👤 Drug Dealer"},
+		{24, `"type":"poll","text":"📊 From an older copy"`, "📊 From an older copy"},
+	}
+	for _, c := range cases {
+		raw := fmt.Sprintf(`{"chat":{"id":"%d","type":"group","title":"Shop"},"messages":[
+ {"id":"990","sender_id":"2","sender_name":"Spammer","files":[],"sent_at":"2026-11-25T10:00:00Z","reported":true,%s}]}`, c.id+60, c.fields)
+		e.exec(`INSERT INTO content_reports (id, reporter_id, kind, chat_id, message_id, target_id, reason, content)
+			VALUES ($1, 1, 'message', $2, 990, 2, 'spam', $3)`, c.id, c.id+60, raw)
+	}
+	got := map[string]string{}
+	for _, r := range e.list("open").Reports {
+		got[r.ID] = r.Excerpt
+	}
+	for _, c := range cases {
+		if id := fmt.Sprint(c.id); got[id] != c.excerpt {
+			t.Errorf("report %s excerpt = %q, want %q", id, got[id], c.excerpt)
+		}
 	}
 }
 

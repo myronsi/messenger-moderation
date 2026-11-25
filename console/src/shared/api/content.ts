@@ -36,6 +36,32 @@ export interface ContentReportSummary {
   decision: ContentDecision | null;
 }
 
+export interface CopiedPollOption {
+  text: string;
+  votes: number;
+}
+
+export interface CopiedPoll {
+  question: string;
+  options: CopiedPollOption[];
+  multiple_answers: boolean;
+  anonymous: boolean;
+  quiz: boolean;
+  closed: boolean;
+}
+
+export interface CopiedLocation {
+  latitude: number;
+  longitude: number;
+  title?: string | null;
+}
+
+export interface CopiedContact {
+  user_id: string;
+  name: string;
+  username?: string | null;
+}
+
 export interface CopiedMessage {
   id: string;
   sender_id: string | null;
@@ -49,6 +75,9 @@ export interface CopiedMessage {
   sent_at: string;
   edited_at?: string | null;
   reported: boolean;
+  poll?: CopiedPoll | null;
+  location?: CopiedLocation | null;
+  contact?: CopiedContact | null;
 }
 
 export interface CopiedGroup {
